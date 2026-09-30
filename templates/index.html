@@ -17,8 +17,8 @@
         .btn { flex: 1; padding: 12px 16px; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s ease; }
         .btn-read { background-color: #3b82f6; color: #ffffff; }
         .btn-read:hover { background-color: #2563eb; }
-        .btn-auto { background-color: #f3f4f6; color: #1f2937; border: 1px solid #e5e7eb; }
-        .btn-auto:hover { background-color: #e5e7eb; }
+        .btn-auto { background-color: #10b981; color: #ffffff; }
+        .btn-auto:hover { background-color: #059669; }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; }
         .table-container { overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; margin-top: 8px; }
@@ -48,7 +48,7 @@
                 📩 Đọc mail
             </button>
             <button class="btn btn-auto" id="btnAuto" onclick="processVerify(true)">
-                ⚡ Xác minh tự động
+                ⚡ Xác minh tự động (API Bấm Link Ngầm)
             </button>
         </div>
     </div>
@@ -75,7 +75,7 @@
     </div>
 
     <script>
-        async function processVerify(isOpenTabs) {
+        async function processVerify(autoTrigger) {
             const btnRead = document.getElementById('btnRead');
             const btnAuto = document.getElementById('btnAuto');
             const input = document.getElementById('emailInput').value.trim();
@@ -88,58 +88,36 @@
 
             const lines = input.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-            // Mở trước các tab rỗng NGAY LÚC CLICK để giữ User Gesture trên PC
-            let openedTabs = [];
-            if (isOpenTabs) {
-                for (let i = 0; i < lines.length; i++) {
-                    try {
-                        let win = window.open('about:blank', '_blank');
-                        openedTabs.push(win);
-                    } catch (e) {
-                        openedTabs.push(null);
-                    }
-                }
-            }
-
             btnRead.disabled = true;
             btnAuto.disabled = true;
-            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;" class="text-muted">Đang quét ${lines.length} tài khoản...</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;" class="text-muted">Đang quét & tự động kích hoạt ${lines.length} tài khoản...</td></tr>`;
 
             try {
                 const response = await fetch('/api/verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ accounts: lines })
+                    body: JSON.stringify({ 
+                        accounts: lines,
+                        auto_trigger: autoTrigger 
+                    })
                 });
 
                 const data = await response.json();
                 tbody.innerHTML = '';
 
                 if (data.results && data.results.length > 0) {
-                    data.results.forEach((item, index) => {
+                    data.results.forEach((item) => {
                         const tr = document.createElement('tr');
                         let linkHtml = `<span class="text-muted">${item.link_status || 'Chưa thấy link'}</span>`;
 
                         if (item.link) {
-                            if (isOpenTabs) {
-                                // Kiểm tra tab rỗng đã mở trước đó có bị Chrome chặn không
-                                if (openedTabs[index] && !openedTabs[index].closed) {
-                                    openedTabs[index].location.href = item.link;
-                                    linkHtml = `<a href="${item.link}" target="_blank" class="link-btn">Link</a> <span class="badge-success">(Đã mở tab)</span>`;
-                                } else {
-                                    linkHtml = `<a href="${item.link}" target="_blank" class="link-btn">Link</a> <span class="status-error-text">(Bị trình duyệt chặn)</span>`;
-                                }
+                            if (item.triggered) {
+                                linkHtml = `<a href="${item.link}" target="_blank" class="link-btn">Link gốc</a> <span class="badge-success">(${item.link_status})</span>`;
                             } else {
-                                linkHtml = `<a href="${item.link}" target="_blank" class="link-btn">Link</a>`;
+                                linkHtml = `<a href="${item.link}" target="_blank" class="link-btn">Link gốc</a>`;
                             }
-                        } else {
-                            // Đóng tab rỗng thừa nếu tài khoản này không có link
-                            if (openedTabs[index] && !openedTabs[index].closed) {
-                                openedTabs[index].close();
-                            }
-                            if (item.status === 'Thất bại') {
-                                linkHtml = `<span class="status-error-text">${item.link_status || 'Lỗi'}</span>`;
-                            }
+                        } else if (item.status === 'Thất bại') {
+                            linkHtml = `<span class="status-error-text">${item.link_status || 'Lỗi'}</span>`;
                         }
 
                         tr.innerHTML = `
@@ -151,12 +129,10 @@
                         tbody.appendChild(tr);
                     });
                 } else {
-                    openedTabs.forEach(t => t && !t.closed && t.close());
                     tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;" class="status-error-text">Không nhận được dữ liệu phản hồi!</td></tr>`;
                 }
 
             } catch (err) {
-                openedTabs.forEach(t => t && !t.closed && t.close());
                 tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;" class="status-error-text">Lỗi kết nối Server!</td></tr>`;
             } finally {
                 btnRead.disabled = false;
