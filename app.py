@@ -19,48 +19,62 @@ def extract_otp_and_link(subject, body_text, body_html, auto_click=False):
     if digits:
         otp_code = digits[0]
 
-    # 2. Bóc tách Link xác minh từ HTML / Text
+    # 2. Bóc tách Link xác minh CHÍNH XÁC từ HTML / Text
     target_html = body_html if body_html else body_text
+    keywords = ["TẠI ĐÂY", "TAI DAY", "XÁC MINH", "XÁC NHẬN", "VERIFY", "CONFIRM", "CLICK", "ACTIVATE", "KÍCH HOẠT"]
+    url_keywords = ["verify", "confirm", "activate", "token", "xac-minh", "kich-hoat"]
+
     if target_html:
         try:
             soup = BeautifulSoup(target_html, 'html.parser')
+            # Tìm thẻ <a> chứa chữ đúng từ khóa
             for a_tag in soup.find_all('a', href=True):
                 text_inside = a_tag.get_text().strip().upper()
                 href = a_tag['href']
-                keywords = ["TẠI ĐÂY", "TAI DAY", "XÁC MINH", "XÁC NHẬN", "VERIFY", "CONFIRM", "CLICK", "ACTIVATE"]
                 if any(kw in text_inside for kw in keywords):
                     verify_link = href
                     break
+            
+            # Nếu chưa thấy, tìm link có chứa từ khóa xác minh trong đường dẫn URL
             if not verify_link:
-                all_links = [a['href'] for a in soup.find_all('a', href=True) if 'http' in a['href']]
-                if all_links:
-                    verify_link = all_links[0]
+                for a_tag in soup.find_all('a', href=True):
+                    href = a_tag['href'].lower()
+                    if any(ukw in href for ukw in url_keywords):
+                        verify_link = a_tag['href']
+                        break
         except Exception:
             pass
 
+    # Nếu không tìm thấy link qua HTML, quét bằng Regex nhưng lọc bỏ trang chủ CheapLuxury
     if not verify_link:
         urls = re.findall(r'(https?://[^\s<>"]+)', full_text)
-        if urls:
-            verify_link = urls[0]
+        for url in urls:
+            url_lower = url.lower()
+            # Bỏ qua link trang chủ hoặc mạng xã hội
+            if "cheapluxurymail.xyz" in url_lower and not any(ukw in url_lower for ukw in url_keywords):
+                continue
+            if any(social in url_lower for social in ["facebook.com", "t.me", "twitter.com", "instagram.com"]):
+                continue
+            if any(ukw in url_lower for ukw in url_keywords):
+                verify_link = url
+                break
 
-    # 3. Mở link ngầm ở Server Backend để tránh bị điều hướng nhảy sang App ngoài
-    link_status = "Chưa bấm"
+    # 3. Kích hoạt ngầm (Chỉ bấm khi chắc chắn tìm thấy LINK XÁC MINH)
+    link_status = "Không có link"
     if verify_link:
         if auto_click:
             session = requests.Session()
             session.headers.update({
-                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'
             })
             try:
-                resp = session.get(verify_link, timeout=12, allow_redirects=True)
-                if resp.status_code == 200:
-                    link_status = "Đã kích hoạt ngầm"
+                resp = session.get(verify_link, timeout=10, allow_redirects=True)
+                if resp.status_code in [200, 301, 302]:
+                    link_status = "Đã xác minh"
                 else:
                     link_status = f"Lỗi HTTP {resp.status_code}"
             except Exception as e:
-                link_status = f"Lỗi kích hoạt: {str(e)}"
+                link_status = "Lỗi kích hoạt"
         else:
             link_status = "Có link"
 
