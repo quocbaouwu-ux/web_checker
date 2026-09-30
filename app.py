@@ -1,188 +1,193 @@
-from flask import Flask, render_template, request, jsonify
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import requests
+import os
 import re
+import imaplib
+import email
+from email.header import decode_header
+from flask import Flask, render_template, request, jsonify
+import requests
+from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
-CHEAPLUXURY_API_URL = "https://cheapluxurymail.xyz/email/get"
-
-def extract_verify_link(content):
+def extract_and_trigger_shopee(subject, body):
     """
-    Hàm bóc tách link xác minh từ nội dung mail (HTML / Text).
-    Ưu tiên thẻ <a> chứa chữ "TẠI ĐÂY" hoặc các từ khóa xác minh.
+    1. Trích xuất OTP 6 chữ số từ email Shopee.
+    2. Kiểm tra và chỉ lấy ĐÚNG link "TẠI ĐÂY" thuộc câu xác nhận đăng nhập.
+    3. Tự động gửi request GET (click ngầm) để kích hoạt link.
     """
-    if not content:
-        return ""
+    otp_code = "Không tìm thấy OTP"
+    verify_link = None
+    full_text = f"{subject} {body}"
 
-    # 1. Ưu tiên tìm thẻ href có chứa từ khóa hoặc thẻ bao quanh chữ "TẠI ĐÂY"
-    tai_day_match = re.search(r'href=["\'](https?://[^"\']+)["\'][^>]*>.*?TẠI\s*ĐÂY', content, re.IGNORECASE | re.DOTALL)
-    if tai_day_match:
-        return tai_day_match.group(1)
-
-    # 2. Tìm tất cả các liên kết URL trong nội dung
-    all_links = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', content)
-    
-    # Lọc lấy link chứa các từ khóa xác minh phổ biến
-    for link in all_links:
-        link_lower = link.lower()
-        if any(k in link_lower for k in ['verify', 'confirm', 'activate', 'token', 'auth', 'code', 'xac-minh']):
-            return link
-
-    # 3. Nếu không khớp từ khóa, lấy link đầu tiên tìm được
-    return all_links[0] if all_links else ""
-
-
-def check_single_account(account_str):
-    """
-    Hàm xử lý cho từng tài khoản trên 1 luồng.
-    """
-    account_str = account_str.strip()
-    if not account_str:
-        return None
-
-    # Tách email và password
-    if '|' in account_str:
-        parts = account_str.split('|', 1)
-        email, password = parts[0].strip(), parts[1].strip()
-    elif ':' in account_str:
-        parts = account_str.split(':', 1)
-        email, password = parts[0].strip(), parts[1].strip()
+    # 1. TRÍCH XUẤT OTP 6 CHỮ SỐ
+    otp_match = re.search(r'Mã xác minh tài khoản Shopee của bạn là:\s*(\d{6})', full_text, re.IGNORECASE)
+    if otp_match:
+        otp_code = otp_match.group(1)
     else:
-        email = account_str
-        password = ""
+        generic_match = re.search(r'\b(\d{6})\b', full_text)
+        if generic_match:
+            otp_code = generic_match.group(1)
 
-    payload = {
-        "email": email,
-        "password": password
-    }
-
-    headers = {
-        "Content-Type": "application/json"
-    }
-
+    # 2. BẮT CHÍNH XÁC LINK "TẠI ĐÂY" NẰM TRONG CÂU XÁC NHẬN ĐĂNG NHẬP
     try:
-        response = requests.post(
-            CHEAPLUXURY_API_URL,
-            json=payload,
-            headers=headers,
-            timeout=12
-        )
-
-        if response.status_code == 200:
-            res_json = response.json()
-            if res_json.get("response_code") == 200:
-                emails_list = res_json.get("data", {}).get("emails", [])
+        soup = BeautifulSoup(body, 'html.parser')
+        
+        # Lọc tất cả các thẻ <a> chứa liên kết
+        for a_tag in soup.find_all('a', href=True):
+            text_inside = a_tag.get_text().strip().upper()
+            
+            # Kiểm tra text hiển thị của liên kết có chứa "TẠI ĐÂY"
+            if "TẠI ĐÂY" in text_inside or "TAI DAY" in text_inside:
+                # Kiểm tra văn bản của phần tử cha để đảm bảo đúng ngữ cảnh câu xác nhận
+                parent_text = a_tag.parent.get_text() if a_tag.parent else ""
                 
-                if emails_list:
-                    latest_email = emails_list[0]
-                    body_html = latest_email.get("body_html", "") or ""
-                    body_text = latest_email.get("body_text", "") or ""
-                    
-                    content = body_html if body_html else body_text
-                    verify_link = extract_verify_link(content)
+                # Kiểm tra các từ khóa đặc trưng trong câu thông báo của Shopee
+                if any(kw in parent_text.lower() for kw in ['đăng nhập', 'dang nhap', 'xác nhận', 'xac nhan', 'hiệu lực', 'hieu luc']):
+                    verify_link = a_tag['href']
+                    break
+    except Exception:
+        pass
 
-                    if verify_link:
-                        return {
-                            'account': account_str,
-                            'email': email,
-                            'status': 'THÀNH CÔNG',
-                            'link': verify_link
-                        }
-                    else:
-                        return {
-                            'account': account_str,
-                            'email': email,
-                            'status': 'ĐÃ ĐỌC (KHÔNG CÓ LINK)',
-                            'link': ''
-                        }
-                else:
-                    return {
-                        'account': account_str,
-                        'email': email,
-                        'status': 'HÒM THƯ TRỐNG',
-                        'link': ''
-                    }
-            else:
-                msg = res_json.get("message", "Lỗi API")
-                return {
-                    'account': account_str,
-                    'email': email,
-                    'status': f'LỖI: {msg}',
-                    'link': ''
-                }
-        else:
-            return {
-                'account': account_str,
-                'email': email,
-                'status': f'HTTP {response.status_code}',
-                'link': ''
+    # 3. KÍCH HOẠT LINK VÀ XỬ LÝ TRẠNG THÁI
+    # Mặc định nếu không tìm thấy đúng link chuẩn sẽ báo không thành công
+    link_status = "Không thành công (Không tìm thấy link TẠI ĐÂY hợp lệ)"
+    
+    if verify_link:
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             }
+            resp = requests.get(verify_link, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                link_status = "Đã tự động xác minh (Thành công)"
+            else:
+                link_status = f"Không thành công (HTTP {resp.status_code})"
+        except Exception as e:
+            link_status = f"Lỗi kích hoạt: {str(e)}"
 
-    except requests.exceptions.Timeout:
-        return {
-            'account': account_str,
-            'email': email,
-            'status': 'LỖI: TIMEOUT',
-            'link': ''
-        }
-    except Exception as e:
-        return {
-            'account': account_str,
-            'email': email,
-            'status': f'LỖI: {str(e)}',
-            'link': ''
-        }
+    return otp_code, verify_link, link_status
 
+def decode_mime_header(header_value):
+    if not header_value:
+        return ""
+    decoded_list = decode_header(header_value)
+    header_text = ""
+    for decoded_string, charset in decoded_list:
+        if isinstance(decoded_string, bytes):
+            charset = charset or 'utf-8'
+            try:
+                header_text += decoded_string.decode(charset, errors='ignore')
+            except Exception:
+                header_text += decoded_string.decode('latin-1', errors='ignore')
+        else:
+            header_text += str(decoded_string)
+    return header_text
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
+@app.route('/api/verify', methods=['POST'])
+def verify_accounts():
+    data = request.get_json() or {}
+    account_lines = data.get('accounts', [])
+    results = []
 
-@app.route('/process', methods=['POST'])
-def process():
-    data = request.get_json()
-    if not data or 'accounts' not in data:
-        return jsonify({'error': 'Dữ liệu không hợp lệ'}), 400
+    for line in account_lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        parts = line.split('|')
+        email_user = parts[0].strip()
+        email_pass = parts[1].strip() if len(parts) > 1 else ""
 
-    raw_text = data.get('accounts', '')
-    lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
-    if not lines:
-        return jsonify({'error': 'Danh sách tài khoản rỗng'}), 400
+        if not email_pass:
+            results.append({
+                "email": email_user,
+                "status": "Lỗi",
+                "otp": "Thiếu Mật Khẩu",
+                "link": None,
+                "link_status": "Không thành công",
+                "message": "Định dạng sai (Cần email|password)"
+            })
+            continue
 
-    results_map = {}
+        try:
+            domain = email_user.split('@')[-1].lower() if '@' in email_user else ''
+            if 'gmail' in domain:
+                imap_server = 'imap.gmail.com'
+            elif 'outlook' in domain or 'hotmail' in domain or 'live' in domain:
+                imap_server = 'outlook.office365.com'
+            else:
+                imap_server = domain if domain else 'mail.fshare.dpdns.org'
 
-    # Chạy 20 luồng song song
-    with ThreadPoolExecutor(max_workers=20) as executor:
-        future_to_acc = {
-            executor.submit(check_single_account, line): line 
-            for line in lines
-        }
-        
-        for future in as_completed(future_to_acc):
-            res = future.result()
-            if res:
-                results_map[res['account']] = res
+            mail = imaplib.IMAP4_SSL(imap_server, port=993)
+            mail.login(email_user, email_pass)
+            mail.select("INBOX")
 
-    # Sắp xếp kết quả đúng thứ tự nhập vào
-    final_results = []
-    for idx, line in enumerate(lines, start=1):
-        res = results_map.get(line, {
-            'account': line,
-            'email': line,
-            'status': 'LỖI KHÔNG XÁC ĐỊNH',
-            'link': ''
-        })
-        final_results.append({
-            'id': idx,
-            'email': res['email'],
-            'status': res['status'],
-            'link': res['link']
-        })
+            status, messages = mail.search(None, 'ALL')
+            mail_ids = messages[0].split()
 
-    return jsonify({'results': final_results})
+            if not mail_ids:
+                results.append({
+                    "email": email_user,
+                    "status": "Thành công",
+                    "otp": "Không có mail",
+                    "link": None,
+                    "link_status": "Hòm thư trống",
+                    "message": "Hòm thư trống"
+                })
+                mail.logout()
+                continue
 
+            # Lấy email mới nhất
+            latest_email_id = mail_ids[-1]
+            status, msg_data = mail.fetch(latest_email_id, '(RFC822)')
+
+            subject = ""
+            body = ""
+
+            for response_part in msg_data:
+                if isinstance(response_part, tuple):
+                    msg = email.message_from_bytes(response_part[1])
+                    subject = decode_mime_header(msg.get("Subject", ""))
+
+                    if msg.is_multipart():
+                        for part in msg.walk():
+                            content_type = part.get_content_type()
+                            content_disposition = str(part.get("Content-Disposition"))
+                            if content_type in ["text/plain", "text/html"] and "attachment" not in content_disposition:
+                                body += part.get_payload(decode=True).decode(errors='ignore')
+                    else:
+                        body = msg.get_payload(decode=True).decode(errors='ignore')
+
+            mail.logout()
+
+            # Trích xuất OTP và Tự động Bấm Link Xác Minh
+            otp_code, verify_link, link_status = extract_and_trigger_shopee(subject, body)
+
+            results.append({
+                "email": email_user,
+                "status": "Thành công",
+                "otp": otp_code,
+                "link": verify_link,
+                "link_status": link_status,
+                "subject": subject[:40] + "..." if len(subject) > 40 else subject
+            })
+
+        except Exception as e:
+            results.append({
+                "email": email_user,
+                "status": "Lỗi",
+                "otp": "Lỗi kết nối",
+                "link": None,
+                "link_status": "Lỗi kết nối IMAP",
+                "message": str(e)
+            })
+
+    return jsonify({"results": results})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
