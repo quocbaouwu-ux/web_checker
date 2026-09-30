@@ -3,167 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Checker Mail</title>
+    <title>mail</title>
     <style>
-        * {
-            box-sizing: border-box;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        }
-
-        body {
-            background-color: #f4f5f7;
-            margin: 0;
-            padding: 16px;
-            color: #333;
-        }
-
-        .alert-box {
-            background-color: #fff0f0;
-            border: 1px solid #ffd6d6;
-            color: #d32f2f;
-            padding: 12px 16px;
-            border-radius: 10px;
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .card {
-            background: #ffffff;
-            border-radius: 16px;
-            padding: 20px;
-            margin-bottom: 16px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-        }
-
-        .card h3 {
-            margin-top: 0;
-            margin-bottom: 8px;
-            font-size: 18px;
-            font-weight: 700;
-        }
-
-        .card p.sub-text {
-            color: #777;
-            font-size: 13px;
-            margin-top: 0;
-            margin-bottom: 12px;
-        }
-
-        textarea {
-            width: 100%;
-            height: 120px;
-            border: 1px solid #e0e0e0;
-            border-radius: 10px;
-            padding: 12px;
-            font-family: monospace;
-            font-size: 13px;
-            outline: none;
-            resize: vertical;
-            background-color: #fafafa;
-        }
-
-        textarea:focus {
-            border-color: #3b82f6;
-            background-color: #fff;
-        }
-
-        .btn-group {
-            display: flex;
-            gap: 10px;
-            margin-top: 14px;
-        }
-
-        .btn {
-            flex: 1;
-            padding: 12px 16px;
-            border: none;
-            border-radius: 10px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            transition: all 0.2s ease;
-        }
-
-        .btn-read {
-            background-color: #3b82f6;
-            color: #ffffff;
-        }
-
-        .btn-read:hover {
-            background-color: #2563eb;
-        }
-
-        .btn-auto {
-            background-color: #f3f4f6;
-            color: #1f2937;
-            border: 1px solid #e5e7eb;
-        }
-
-        .btn-auto:hover {
-            background-color: #e5e7eb;
-        }
-
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-
-        .table-container {
-            overflow-x: auto;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 8px;
-        }
-
-        th, td {
-            border: 1px solid #f0f0f0;
-            padding: 12px 10px;
-            text-align: left;
-            font-size: 13px;
-            vertical-align: middle;
-            word-break: break-all;
-        }
-
-        th {
-            background-color: #ffffff;
-            font-weight: 700;
-            color: #111827;
-        }
-
-        .badge-success {
-            color: #16a34a;
-            font-weight: 700;
-        }
-
-        .badge-error {
-            color: #dc2626;
-            font-weight: 700;
-        }
-
-        a.link-btn {
-            color: #2563eb;
-            text-decoration: underline;
-        }
-
-        .text-muted {
-            color: #6b7280;
-        }
-
-        .status-error-text {
-            color: #dc2626;
-            font-size: 12px;
-        }
+        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { background-color: #f4f5f7; margin: 0; padding: 16px; color: #333; }
+        .alert-box { background-color: #fff0f0; border: 1px solid #ffd6d6; color: #d32f2f; padding: 12px 16px; border-radius: 10px; font-size: 14px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 6px; }
+        .card { background: #ffffff; border-radius: 16px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04); }
+        .card h3 { margin-top: 0; margin-bottom: 8px; font-size: 18px; font-weight: 700; }
+        .card p.sub-text { color: #777; font-size: 13px; margin-top: 0; margin-bottom: 12px; }
+        textarea { width: 100%; height: 120px; border: 1px solid #e0e0e0; border-radius: 10px; padding: 12px; font-family: monospace; font-size: 13px; outline: none; resize: vertical; background-color: #fafafa; }
+        textarea:focus { border-color: #3b82f6; background-color: #fff; }
+        .btn-group { display: flex; gap: 10px; margin-top: 14px; }
+        .btn { flex: 1; padding: 12px 16px; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s ease; }
+        .btn-read { background-color: #3b82f6; color: #ffffff; }
+        .btn-read:hover { background-color: #2563eb; }
+        .btn-auto { background-color: #f3f4f6; color: #1f2937; border: 1px solid #e5e7eb; }
+        .btn-auto:hover { background-color: #e5e7eb; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        th, td { border: 1px solid #f0f0f0; padding: 12px 10px; text-align: left; font-size: 13px; vertical-align: middle; word-break: break-all; }
+        th { background-color: #ffffff; font-weight: 700; color: #111827; }
+        .badge-success { color: #16a34a; font-weight: 700; }
+        .badge-error { color: #dc2626; font-weight: 700; }
+        a.link-btn { color: #2563eb; text-decoration: underline; }
+        .text-muted { color: #6b7280; }
+        .status-error-text { color: #dc2626; font-size: 12px; }
     </style>
 </head>
 <body>
@@ -223,18 +88,9 @@
 
             const lines = input.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-            // Mở tab ngay lập tức khi nhấn để vượt bộ lọc Safari/Chrome
-            let openedTabs = [];
-            if (isOpenTabs) {
-                for (let i = 0; i < lines.length; i++) {
-                    let win = window.open('about:blank', '_blank');
-                    openedTabs.push(win);
-                }
-            }
-
             btnRead.disabled = true;
             btnAuto.disabled = true;
-            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;" class="text-muted">Đang quét ${lines.length} tài khoản (Vui lòng chờ)...</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;" class="text-muted">Đang quét ${lines.length} tài khoản...</td></tr>`;
 
             try {
                 const response = await fetch('/api/verify', {
@@ -247,29 +103,27 @@
                 tbody.innerHTML = '';
 
                 if (data.results && data.results.length > 0) {
-                    data.results.forEach((item, index) => {
+                    data.results.forEach((item) => {
                         const tr = document.createElement('tr');
-                        let tabStatus = "";
+                        let linkHtml = `<span class="text-muted">${item.link_status || 'Chưa thấy link'}</span>`;
 
-                        if (isOpenTabs) {
-                            if (openedTabs[index]) {
-                                if (item.link) {
-                                    openedTabs[index].location.href = item.link;
-                                    tabStatus = " <span class='text-muted'>(Đã mở tab)</span>";
-                                } else {
-                                    openedTabs[index].close();
-                                    tabStatus = " <span class='text-muted'>(Không có link)</span>";
-                                }
-                            } else {
-                                tabStatus = " <span class='status-error-text'>(Bị trình duyệt chặn)</span>";
-                            }
-                        }
-
-                        let linkHtml = `<span class="text-muted">${item.link_status || 'Chưa thấy yêu cầu đăng nhập'}</span>`;
                         if (item.link) {
-                            linkHtml = `<a href="${item.link}" target="_blank" rel="noopener noreferrer" class="link-btn">Link</a>${tabStatus}`;
-                        } else if (item.link_status && item.status === 'Thất bại') {
-                            linkHtml = `<span class="status-error-text">${item.link_status}</span>`;
+                            if (isOpenTabs) {
+                                // TỰ ĐỘNG KÍCH HOẠT LINK NGẦM BẰNG IFRAME (KHÔNG BỊ CHẶN POP-UP)
+                                const iframe = document.createElement('iframe');
+                                iframe.style.display = 'none';
+                                iframe.src = item.link;
+                                document.body.appendChild(iframe);
+
+                                // Xóa iframe sau 10 giây
+                                setTimeout(() => iframe.remove(), 10000);
+
+                                linkHtml = `<a href="${item.link}" target="_blank" class="link-btn">Link</a> <span class="badge-success">(Đã kích hoạt ngầm)</span>`;
+                            } else {
+                                linkHtml = `<a href="${item.link}" target="_blank" class="link-btn">Link</a>`;
+                            }
+                        } else if (item.status === 'Thất bại') {
+                            linkHtml = `<span class="status-error-text">${item.link_status || 'Lỗi'}</span>`;
                         }
 
                         tr.innerHTML = `
@@ -281,12 +135,10 @@
                         tbody.appendChild(tr);
                     });
                 } else {
-                    openedTabs.forEach(t => t && t.close());
-                    tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;" class="status-error-text">Không nhận được dữ liệu từ Server!</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;" class="status-error-text">Không nhận được dữ liệu phản hồi!</td></tr>`;
                 }
 
             } catch (err) {
-                openedTabs.forEach(t => t && t.close());
                 tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;" class="status-error-text">Lỗi kết nối Server!</td></tr>`;
             } finally {
                 btnRead.disabled = false;
