@@ -30,7 +30,7 @@ def is_within_15_minutes(date_str):
     except Exception:
         return True
 
-def extract_otp_and_link(subject, body_text, body_html, auto_click=False):
+def extract_otp_and_link(subject, body_text, body_html):
     otp_code = "Không thấy OTP"
     verify_link = None
     
@@ -75,29 +75,10 @@ def extract_otp_and_link(subject, body_text, body_html, auto_click=False):
                 verify_link = url
                 break
 
-    link_status = "Chưa thấy yêu cầu đăng nhập"
-    if verify_link:
-        # Nếu bật auto_click, Server sẽ tự kích hoạt link luôn mà không cần trình duyệt mở tab
-        if auto_click:
-            session = requests.Session()
-            session.headers.update({
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-            })
-            try:
-                resp = session.get(verify_link, timeout=8, allow_redirects=True)
-                if resp.status_code in [200, 301, 302]:
-                    link_status = "Đã xác minh (Server Auto)"
-                else:
-                    link_status = f"Lỗi HTTP {resp.status_code}"
-            except Exception:
-                link_status = "Lỗi kích hoạt"
-        else:
-            link_status = "Có link"
-
+    link_status = "Có link" if verify_link else "Chưa thấy yêu cầu đăng nhập"
     return otp_code, verify_link, link_status
 
-def check_single_account(account_data):
-    line, auto_click = account_data
+def check_single_account(line):
     line = line.strip()
     if not line or '|' not in line:
         return {
@@ -157,7 +138,7 @@ def check_single_account(account_data):
             body_text = latest_email.get('body_text', '')
             body_html = latest_email.get('body_html', '')
 
-            otp, link, link_status = extract_otp_and_link(subject, body_text, body_html, auto_click=auto_click)
+            otp, link, link_status = extract_otp_and_link(subject, body_text, body_html)
 
             return {
                 "email": email,
@@ -192,13 +173,9 @@ def index():
 def api_verify():
     data = request.get_json() or {}
     accounts = data.get('accounts', [])
-    auto_click = data.get('auto_click', False)
 
-    tasks = [(line, auto_click) for line in accounts]
-
-    # Xử lý 20 tài khoản cùng lúc trên Server
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        results = list(executor.map(check_single_account, tasks))
+        results = list(executor.map(check_single_account, accounts))
 
     return jsonify({"results": [r for r in results if r is not None]})
 
