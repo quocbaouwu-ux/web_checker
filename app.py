@@ -9,23 +9,17 @@ from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
-def extract_and_trigger_shopee(subject, body):
-    """
-    1. Chỉ quét lấy chuỗi 6 chữ số OTP.
-    2. Lấy link xác nhận 'TẠI ĐÂY'.
-    3. Gửi Request mô phỏng Browser để kích hoạt trên Web (tránh bị nhảy app).
-    """
-    otp_code = "Không tìm thấy OTP"
+def extract_otp_and_link(subject, body):
+    otp_code = "Không thấy OTP"
     verify_link = None
     full_text = f"{subject} {body}"
 
-    # 1. CHỈ QUÉT LẤY DÃY 6 CHỮ SỐ (OTP)
-    # Tìm tất cả chuỗi 6 chữ số liên tiếp
+    # 1. Tìm chuỗi 6 chữ số OTP
     digits = re.findall(r'\b\d{6}\b', full_text)
     if digits:
-        otp_code = digits[0]  # Lấy mã 6 số đầu tiên tìm thấy
+        otp_code = digits[0]
 
-    # 2. BẮT LINK TẠI ĐÂY
+    # 2. Bắt link TẠI ĐÂY
     try:
         soup = BeautifulSoup(body, 'html.parser')
         for a_tag in soup.find_all('a', href=True):
@@ -36,24 +30,17 @@ def extract_and_trigger_shopee(subject, body):
     except Exception:
         pass
 
-    # 3. KÍCH HOẠT LINK BẰNG GIẢ LẬP TRÌNH DUYỆT WEB (WEB BROWSER)
-    link_status = "Không thành công (Không thấy link TẠI ĐÂY)"
-    
+    # 3. Kích hoạt link bằng User-Agent Browser
+    link_status = "Không có link TẠI ĐÂY"
     if verify_link:
         try:
-            # Header mô phỏng Browser trên máy tính để Shopee xác nhận bằng Web (không nhảy sang App)
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-                'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
-                'Sec-Ch-Ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
-                'Sec-Ch-Ua-Mobile': '?0',
-                'Sec-Ch-Ua-Platform': '"Windows"',
-                'Upgrade-Insecure-Requests': '1'
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
             }
-            resp = requests.get(verify_link, headers=headers, timeout=12, allow_redirects=True)
+            resp = requests.get(verify_link, headers=headers, timeout=10, allow_redirects=True)
             if resp.status_code == 200:
-                link_status = "Đã tự động xác minh Browser (Thành công)"
+                link_status = "Đã bấm link (Thành công)"
             else:
                 link_status = f"Đã bấm link (HTTP {resp.status_code})"
         except Exception as e:
@@ -102,8 +89,7 @@ def verify_accounts():
                 "status": "Lỗi",
                 "otp": "Thiếu Pass",
                 "link": None,
-                "link_status": "Không thành công",
-                "message": "Thiếu mật khẩu"
+                "link_status": "Lỗi"
             })
             continue
 
@@ -127,15 +113,13 @@ def verify_accounts():
                 results.append({
                     "email": email_user,
                     "status": "Thành công",
-                    "otp": "Không có mail",
+                    "otp": "Hòm thư trống",
                     "link": None,
-                    "link_status": "Hòm thư trống",
-                    "message": "Hòm thư trống"
+                    "link_status": "Không có mail"
                 })
                 mail.logout()
                 continue
 
-            # Lấy email mới nhất
             latest_email_id = mail_ids[-1]
             status, msg_data = mail.fetch(latest_email_id, '(RFC822)')
 
@@ -158,8 +142,7 @@ def verify_accounts():
 
             mail.logout()
 
-            # Trích xuất OTP và Tự động Bấm Link
-            otp_code, verify_link, link_status = extract_and_trigger_shopee(subject, body)
+            otp_code, verify_link, link_status = extract_otp_and_link(subject, body)
 
             results.append({
                 "email": email_user,
@@ -175,8 +158,7 @@ def verify_accounts():
                 "status": "Lỗi",
                 "otp": "Lỗi IMAP",
                 "link": None,
-                "link_status": "Lỗi kết nối",
-                "message": str(e)
+                "link_status": f"Lỗi: {str(e)}"
             })
 
     return jsonify({"results": results})
