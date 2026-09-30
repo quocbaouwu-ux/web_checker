@@ -2,6 +2,7 @@ import os
 import re
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+from concurrent.futures import ThreadPoolExecutor
 from bs4 import BeautifulSoup
 import requests
 from flask import Flask, render_template, request, jsonify
@@ -10,8 +11,10 @@ app = Flask(__name__)
 
 CHEAPLUXURY_API_URL = "https://cheapluxurymail.xyz/login"
 
+# Đã chỉnh lên 20 luồng xử lý đồng thời cùng lúc
+MAX_WORKERS = 20
+
 def is_within_15_minutes(date_str):
-    """Kiểm tra xem email có được gửi trong vòng 15 phút gần đây không"""
     if not date_str:
         return False
     try:
@@ -30,18 +33,18 @@ def is_within_15_minutes(date_str):
     except Exception:
         return True
 
-def extract_otp_and_link(subject, body_text, body_html):
+def extract_otp_and_link(subject, body_text, body_html, auto_click=False):
     otp_code = "Không thấy OTP"
     verify_link = None
     
     full_text = f"{subject or ''} {body_text or ''} {body_html or ''}"
     
-    # 1. Tìm mã OTP 6 chữ số
+    # 1. Tìm OTP 6 chữ số
     digits = re.findall(r'\b\d{6}\b', full_text)
     if digits:
         otp_code = digits[0]
 
-    # 2. Bóc tách Link xác minh từ HTML / Text
+    # 2. Bóc tách Link xác minh
     target_html = body_html if body_html else body_text
     keywords = ["TẠI ĐÂY", "TAI DAY", "XÁC MINH", "XÁC NHẬN", "VERIFY", "CONFIRM", "CLICK", "ACTIVATE", "KÍCH HOẠT"]
     url_keywords = ["verify", "confirm", "activate", "token", "xac-minh", "kich-hoat"]
@@ -77,20 +80,48 @@ def extract_otp_and_link(subject, body_text, body_html):
                 verify_link = url
                 break
 
-    link_status = "Có link" if verify_link else "Chưa thấy yêu cầu đăng nhập"
+    # 3. Kích hoạt link
+    link_status = "Chưa thấy yêu cầu đăng nhập"
+    if verify_link:
+        if auto_click:
+            session = requests.Session()
+            session.headers.update({
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+            })
+            try:
+                resp = session.get(verify_link, timeout=10, allow_redirects=True)
+                if resp.status_code in [200, 301, 302]:
+                    link_status = "Đã xác minh"
+                else:
+                    link_status = f"Lỗi HTTP {resp.status_code}"
+            except Exception:
+                link_status = "Lỗi kích hoạt"
+        else:
+            link_status = "Có link"
+
     return otp_code, verify_link, link_status
 
-def check_single_account(email, password):
+def check_single_account(account_data):
+    """ Hàm xử lý cho từng tài khoản đơn lẻ """
+    line, auto_click = account_data
+    if '|' not in line:
+        return {
+            "email": line,
+            "status": "Thất bại",
+            "otp": "N/A",
+            "link": None,
+            "link_status": "Sai định dạng email|password"
+        }
+
+    parts = line.split('|')
+    email = parts[0].strip()
+    password = parts[1].strip()
+
     try:
-        payload = {
-            'email': email,
-            'password': password
-        }
-        headers = {
-            'Content-Type': 'application/json'
-        }
+        payload = {'email': email, 'password': password}
+        headers = {'Content-Type': 'application/json'}
         
-        response = requests.post(CHEAPLUXURY_API_URL, json=payload, headers=headers, timeout=12)
+        response = requests.post(CHEAPLUXURY_API_URL, json=payload, headers=headers, timeout=10)
         
         if response.status_code != 200:
             return {
@@ -118,7 +149,6 @@ def check_single_account(email, password):
             latest_email = emails_list[0]
             date_str = latest_email.get('date') or latest_email.get('created_at') or latest_email.get('time')
 
-            # Kiểm tra thời gian 15 phút
             if not is_within_15_minutes(date_str):
                 return {
                     "email": email,
@@ -132,7 +162,7 @@ def check_single_account(email, password):
             body_text = latest_email.get('body_text', '')
             body_html = latest_email.get('body_html', '')
 
-            otp, link, link_status = extract_otp_and_link(subject, body_text, body_html)
+            otp, link, link_status = extract_otp_and_link(subject, body_text, body_html, auto_click=auto_click)
 
             return {
                 "email": email,
@@ -168,23 +198,14 @@ def index():
 def api_verify():
     data = request.get_json() or {}
     accounts = data.get('accounts', [])
+    auto_click = data.get('auto_click', False)
 
+    tasks = [(line, auto_click) for line in accounts]
+
+    # Chạy đồng thời 20 tài khoản cùng lúc
     results = []
-    for line in accounts:
-        if '|' in line:
-            parts = line.split('|')
-            email = parts[0].strip()
-            password = parts[1].strip()
-            res = check_single_account(email, password)
-            results.append(res)
-        else:
-            results.append({
-                "email": line,
-                "status": "Thất bại",
-                "otp": "N/A",
-                "link": None,
-                "link_status": "Sai định dạng email|password"
-            })
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        results = list(executor.map(check_single_account, tasks))
 
     return jsonify({"results": results})
 
