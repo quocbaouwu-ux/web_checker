@@ -1,5 +1,6 @@
 import os
 import re
+import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from concurrent.futures import ThreadPoolExecutor
@@ -10,7 +11,9 @@ from flask import Flask, render_template, request, jsonify
 app = Flask(__name__)
 
 CHEAPLUXURY_API_URL = "https://cheapluxurymail.xyz/login"
-MAX_WORKERS = 20
+
+# Giảm xuống 8-10 luồng để API không bị nghẽn
+MAX_WORKERS = 8
 
 def is_within_15_minutes(date_str):
     if not date_str:
@@ -93,12 +96,31 @@ def check_single_account(line):
     email = parts[0].strip()
     password = parts[1].strip()
 
+    payload = {'email': email, 'password': password}
+    headers = {'Content-Type': 'application/json'}
+    
+    # Thử kết nối lại tối đa 2 lần nếu timeout
+    max_retries = 2
+    response = None
+
+    for attempt in range(max_retries):
+        try:
+            # Tăng timeout lên 25 giây
+            response = requests.post(CHEAPLUXURY_API_URL, json=payload, headers=headers, timeout=25)
+            break
+        except requests.exceptions.RequestException as e:
+            if attempt < max_retries - 1:
+                time.sleep(1) # Chờ 1s rồi gửi lại
+            else:
+                return {
+                    "email": email,
+                    "status": "Thất bại",
+                    "otp": "N/A",
+                    "link": None,
+                    "link_status": "Lỗi kết nối (Server mail quá tải / Timeout)"
+                }
+
     try:
-        payload = {'email': email, 'password': password}
-        headers = {'Content-Type': 'application/json'}
-        
-        response = requests.post(CHEAPLUXURY_API_URL, json=payload, headers=headers, timeout=10)
-        
         if response.status_code != 200:
             return {
                 "email": email,
@@ -162,7 +184,7 @@ def check_single_account(line):
             "status": "Thất bại",
             "otp": "N/A",
             "link": None,
-            "link_status": f"Lỗi kết nối: {str(e)}"
+            "link_status": f"Lỗi xử lý dữ liệu: {str(e)}"
         }
 
 @app.route('/')
