@@ -26,7 +26,7 @@
         th { background-color: #ffffff; font-weight: 700; color: #111827; }
         .badge-success { color: #16a34a; font-weight: 700; }
         .badge-error { color: #dc2626; font-weight: 700; }
-        a.link-btn { color: #2563eb; text-decoration: underline; }
+        a.link-btn { color: #2563eb; text-decoration: underline; font-weight: 600; }
         .text-muted { color: #6b7280; }
         .status-error-text { color: #dc2626; font-size: 12px; }
     </style>
@@ -45,10 +45,10 @@
         
         <div class="btn-group">
             <button class="btn btn-read" id="btnRead" onclick="processVerify(false)">
-                📩 Đọc mail
+                📩 Đọc mail (Chỉ lấy link/OTP)
             </button>
             <button class="btn btn-auto" id="btnAuto" onclick="processVerify(true)">
-                ⚡ Xác minh tự động (API Bấm Link Ngầm)
+                ⚡ Xác minh tự động (Tự nhảy tab bấm link)
             </button>
         </div>
     </div>
@@ -75,7 +75,7 @@
     </div>
 
     <script>
-        async function processVerify(autoTrigger) {
+        async function processVerify(isOpenTabs) {
             const btnRead = document.getElementById('btnRead');
             const btnAuto = document.getElementById('btnAuto');
             const input = document.getElementById('emailInput').value.trim();
@@ -88,22 +88,27 @@
 
             const lines = input.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
+            // Mở sẵn 1 tab trống ngay khi click chuột để không bị cơ chế chặn Pop-up của Chrome
+            let runnerWin = null;
+            if (isOpenTabs) {
+                runnerWin = window.open('about:blank', '_blank');
+            }
+
             btnRead.disabled = true;
             btnAuto.disabled = true;
-            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;" class="text-muted">Đang quét & tự động kích hoạt ${lines.length} tài khoản...</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;" class="text-muted">Đang quét ${lines.length} tài khoản...</td></tr>`;
 
             try {
                 const response = await fetch('/api/verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        accounts: lines,
-                        auto_trigger: autoTrigger 
-                    })
+                    body: JSON.stringify({ accounts: lines })
                 });
 
                 const data = await response.json();
                 tbody.innerHTML = '';
+
+                let validLinks = [];
 
                 if (data.results && data.results.length > 0) {
                     data.results.forEach((item) => {
@@ -111,11 +116,8 @@
                         let linkHtml = `<span class="text-muted">${item.link_status || 'Chưa thấy link'}</span>`;
 
                         if (item.link) {
-                            if (item.triggered) {
-                                linkHtml = `<a href="${item.link}" target="_blank" class="link-btn">Link gốc</a> <span class="badge-success">(${item.link_status})</span>`;
-                            } else {
-                                linkHtml = `<a href="${item.link}" target="_blank" class="link-btn">Link gốc</a>`;
-                            }
+                            validLinks.push(item.link);
+                            linkHtml = `<a href="${item.link}" target="_blank" class="link-btn">Mở link thủ công</a>`;
                         } else if (item.status === 'Thất bại') {
                             linkHtml = `<span class="status-error-text">${item.link_status || 'Lỗi'}</span>`;
                         }
@@ -128,11 +130,31 @@
                         `;
                         tbody.appendChild(tr);
                     });
+
+                    // Tab tự động chuyển hướng lần lượt qua các link xác minh (cách nhau 3 giây)
+                    if (isOpenTabs && runnerWin && validLinks.length > 0) {
+                        let idx = 0;
+                        function step() {
+                            if (idx < validLinks.length && !runnerWin.closed) {
+                                runnerWin.location.href = validLinks[idx];
+                                idx++;
+                                if (idx < validLinks.length) {
+                                    setTimeout(step, 3000);
+                                }
+                            }
+                        }
+                        step();
+                    } else if (runnerWin && validLinks.length === 0) {
+                        runnerWin.close();
+                    }
+
                 } else {
+                    if (runnerWin) runnerWin.close();
                     tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;" class="status-error-text">Không nhận được dữ liệu phản hồi!</td></tr>`;
                 }
 
             } catch (err) {
+                if (runnerWin) runnerWin.close();
                 tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;" class="status-error-text">Lỗi kết nối Server!</td></tr>`;
             } finally {
                 btnRead.disabled = false;
