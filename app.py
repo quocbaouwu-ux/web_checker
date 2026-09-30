@@ -19,7 +19,7 @@ def extract_otp_and_link(subject, body_text, body_html, auto_click=False):
     if digits:
         otp_code = digits[0]
 
-    # 2. Bóc tách Link xác minh CHÍNH XÁC từ HTML / Text
+    # 2. Bóc tách Link xác minh từ HTML / Text
     target_html = body_html if body_html else body_text
     keywords = ["TẠI ĐÂY", "TAI DAY", "XÁC MINH", "XÁC NHẬN", "VERIFY", "CONFIRM", "CLICK", "ACTIVATE", "KÍCH HOẠT"]
     url_keywords = ["verify", "confirm", "activate", "token", "xac-minh", "kich-hoat"]
@@ -35,7 +35,7 @@ def extract_otp_and_link(subject, body_text, body_html, auto_click=False):
                     verify_link = href
                     break
             
-            # Nếu chưa thấy, tìm link có chứa từ khóa xác minh trong đường dẫn URL
+            # Tìm theo URL nếu chưa có
             if not verify_link:
                 for a_tag in soup.find_all('a', href=True):
                     href = a_tag['href'].lower()
@@ -45,12 +45,11 @@ def extract_otp_and_link(subject, body_text, body_html, auto_click=False):
         except Exception:
             pass
 
-    # Nếu không tìm thấy link qua HTML, quét bằng Regex nhưng lọc bỏ trang chủ CheapLuxury
+    # Quét Regex nhưng lọc bỏ các link trang chủ/mạng xã hội
     if not verify_link:
         urls = re.findall(r'(https?://[^\s<>"]+)', full_text)
         for url in urls:
             url_lower = url.lower()
-            # Bỏ qua link trang chủ hoặc mạng xã hội
             if "cheapluxurymail.xyz" in url_lower and not any(ukw in url_lower for ukw in url_keywords):
                 continue
             if any(social in url_lower for social in ["facebook.com", "t.me", "twitter.com", "instagram.com"]):
@@ -59,8 +58,9 @@ def extract_otp_and_link(subject, body_text, body_html, auto_click=False):
                 verify_link = url
                 break
 
-    # 3. Kích hoạt ngầm (Chỉ bấm khi chắc chắn tìm thấy LINK XÁC MINH)
-    link_status = "Không có link"
+    # 3. Xử lý thông báo
+    # Nếu không có link -> Đặt chữ thông báo thành "Chưa thấy yêu cầu đăng nhập"
+    link_status = "Chưa thấy yêu cầu đăng nhập"
     if verify_link:
         if auto_click:
             session = requests.Session()
@@ -73,7 +73,7 @@ def extract_otp_and_link(subject, body_text, body_html, auto_click=False):
                     link_status = "Đã xác minh"
                 else:
                     link_status = f"Lỗi HTTP {resp.status_code}"
-            except Exception as e:
+            except Exception:
                 link_status = "Lỗi kích hoạt"
         else:
             link_status = "Có link"
@@ -112,7 +112,7 @@ def check_single_account(email, password, auto_click=False):
                     "status": "Thành công",
                     "otp": "Hòm thư trống",
                     "link": None,
-                    "link_status": "Chưa nhận được thư"
+                    "link_status": "Chưa thấy yêu cầu đăng nhập"
                 }
             
             latest_email = emails_list[0]
