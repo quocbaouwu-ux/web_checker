@@ -99,7 +99,8 @@
                         
                         let linkHtml = '<span style="color:#888;">Không có</span>';
                         if (item.link) {
-                            linkHtml = `<a href="${item.link}" target="_blank" style="color: #1976d2;">Link</a> (${item.link_status})`;
+                            // Đã loại bỏ target="_blank" để không mở tab/trình duyệt mới
+                            linkHtml = `<a href="${item.link}" style="color: #1976d2;">Link</a> (${item.link_status})`;
                         } else if (item.link_status) {
                             linkHtml = `<span style="color:#888;">${item.link_status}</span>`;
                         }
