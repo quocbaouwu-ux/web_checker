@@ -1,5 +1,7 @@
 import os
 import re
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from bs4 import BeautifulSoup
 import requests
 from flask import Flask, render_template, request, jsonify
@@ -7,6 +9,33 @@ from flask import Flask, render_template, request, jsonify
 app = Flask(__name__)
 
 CHEAPLUXURY_API_URL = "https://cheapluxurymail.xyz/login"
+
+def is_within_15_minutes(date_str):
+    """Kiểm tra xem email có được gửi trong vòng 15 phút gần đây không (dùng thư viện có sẵn)"""
+    if not date_str:
+        return False
+    try:
+        # Thử parse thời gian dạng chuẩn RFC 2822 hoặc ISO
+        try:
+            email_time = parsedate_to_datetime(date_str)
+        except Exception:
+            # Fallback nếu định dạng ISO string (2026-09-30T17:57:00Z)
+            email_time = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+        
+        if email_time.tzinfo is None:
+            email_time = email_time.replace(tzinfo=timezone.utc)
+        
+        # Thời gian hiện tại UTC
+        now = datetime.now(timezone.utc)
+        
+        # Tính khoảng cách thời gian (tính bằng giây)
+        diff_in_seconds = (now - email_time).total_seconds()
+        
+        # 15 phút = 900 giây
+        return 0 <= diff_in_seconds <= 900
+    except Exception:
+        # Nếu không parse được định dạng ngày, mặc định chấp nhận
+        return True
 
 def extract_otp_and_link(subject, body_text, body_html, auto_click=False):
     otp_code = "Không thấy OTP"
@@ -27,7 +56,6 @@ def extract_otp_and_link(subject, body_text, body_html, auto_click=False):
     if target_html:
         try:
             soup = BeautifulSoup(target_html, 'html.parser')
-            # Tìm thẻ <a> chứa chữ đúng từ khóa
             for a_tag in soup.find_all('a', href=True):
                 text_inside = a_tag.get_text().strip().upper()
                 href = a_tag['href']
@@ -35,7 +63,6 @@ def extract_otp_and_link(subject, body_text, body_html, auto_click=False):
                     verify_link = href
                     break
             
-            # Tìm theo URL nếu chưa có
             if not verify_link:
                 for a_tag in soup.find_all('a', href=True):
                     href = a_tag['href'].lower()
@@ -45,7 +72,6 @@ def extract_otp_and_link(subject, body_text, body_html, auto_click=False):
         except Exception:
             pass
 
-    # Quét Regex nhưng lọc bỏ các link trang chủ/mạng xã hội
     if not verify_link:
         urls = re.findall(r'(https?://[^\s<>"]+)', full_text)
         for url in urls:
@@ -58,8 +84,7 @@ def extract_otp_and_link(subject, body_text, body_html, auto_click=False):
                 verify_link = url
                 break
 
-    # 3. Xử lý thông báo
-    # Nếu không có link -> Đặt chữ thông báo thành "Chưa thấy yêu cầu đăng nhập"
+    # 3. Xử lý kích hoạt
     link_status = "Chưa thấy yêu cầu đăng nhập"
     if verify_link:
         if auto_click:
@@ -115,7 +140,20 @@ def check_single_account(email, password, auto_click=False):
                     "link_status": "Chưa thấy yêu cầu đăng nhập"
                 }
             
+            # Lấy thư mới nhất
             latest_email = emails_list[0]
+            date_str = latest_email.get('date') or latest_email.get('created_at') or latest_email.get('time')
+
+            # Kiểm tra xem mail có trong vòng 15 phút gần đây không
+            if not is_within_15_minutes(date_str):
+                return {
+                    "email": email,
+                    "status": "Thành công",
+                    "otp": "Không thấy OTP mới",
+                    "link": None,
+                    "link_status": "Chưa thấy yêu cầu đăng nhập"
+                }
+
             subject = latest_email.get('subject', '')
             body_text = latest_email.get('body_text', '')
             body_html = latest_email.get('body_html', '')
