@@ -3,283 +3,130 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Đọc mail & Xác minh tự động</title>
+    <title>Đọc Mail - OTP & Tự Động Xác Minh Shopee</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { 
-            background-color: #f8fafc; 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            color: #334155;
-        }
-        .container-custom {
-            max-width: 900px;
-            margin: 40px auto;
-        }
-        .main-card {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-        }
-        .card-header-custom {
-            padding: 16px 24px;
-            border-bottom: 1px solid #f1f5f9;
-            font-weight: 600;
-            font-size: 16px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .card-body-custom {
-            padding: 24px;
-        }
-        .info-box {
-            background-color: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 14px 16px;
-            font-size: 13.5px;
-            color: #475569;
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-            margin-bottom: 16px;
-        }
-        .alert-danger-custom {
-            background-color: #fef2f2;
-            border: 1px solid #fca5a5;
-            color: #dc2626;
-            border-radius: 8px;
-            padding: 12px 16px;
-            font-size: 14px;
-            font-weight: 700;
-            margin-bottom: 20px;
-        }
-        .form-label {
-            font-size: 13.5px;
-            font-weight: 600;
-            color: #1e293b;
-            margin-bottom: 8px;
-        }
-        .form-control {
-            border: 1px solid #cbd5e1;
-            border-radius: 8px;
-            font-size: 14px;
-            padding: 12px;
-        }
-        .btn-group-action {
-            display: flex;
-            gap: 12px;
-            margin-top: 20px;
-        }
-        .btn-read-mail {
-            background-color: #2563eb;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            padding: 10px 20px;
-            font-size: 14px;
-            font-weight: 500;
-        }
-        .btn-read-mail:hover { background-color: #1d4ed8; color: white; }
-        .btn-auto-verify {
-            background-color: #ffffff;
-            color: #334155;
-            border: 1px solid #cbd5e1;
-            border-radius: 8px;
-            padding: 10px 20px;
-            font-size: 14px;
-            font-weight: 500;
-        }
-        .btn-auto-verify:hover { background-color: #f8fafc; color: #0f172a; }
-        .footer-text {
-            text-align: center;
-            font-size: 13px;
-            color: #94a3b8;
-            margin-top: 30px;
-        }
-        .btn-tai-day {
-            background-color: #2563eb;
-            color: white !important;
-            font-weight: 700;
-            padding: 4px 12px;
-            border-radius: 6px;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 13px;
-        }
-        .btn-tai-day:hover {
-            background-color: #1d4ed8;
-        }
+        body { background-color: #f8f9fa; font-family: system-ui, -apple-system, sans-serif; }
+        .card-custom { border-radius: 12px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .otp-badge { font-size: 1.1rem; font-weight: bold; letter-spacing: 2px; }
+        .table td { vertical-align: middle; }
     </style>
 </head>
 <body>
-
-<div class="container container-custom">
-    <div class="main-card">
-        <div class="card-header-custom">
-            <i class="fa-regular fa-envelope text-secondary"></i>
-            <span>Đọc mail</span>
-        </div>
-
-        <div class="card-body-custom">
-            <div class="info-box">
-                <i class="fa-solid fa-circle-info mt-1 text-secondary"></i>
-                <div>
-                    Dán danh sách email, mỗi email trên một dòng. Hệ thống sẽ đọc theo batch, và nút "Xác minh tự động" sẽ gọi API verify phía server để kiểm tra link xác minh trong thư mới nhất.
-                </div>
-            </div>
-
-            <div class="alert-danger-custom text-center">
-                ⚠️ LƯU Ý: Hòm thư chỉ tồn tại trong vòng 3 ngày, sau 3 ngày sẽ xoá.
+    <div class="container py-4" style="max-width: 1050px;">
+        <div class="card card-custom p-4 mb-4 bg-white">
+            <h4 class="mb-3">✉️️ Đọc Mail: OTP & Tự Động Click Xác Minh Shopee</h4>
+            
+            <div class="alert alert-info small mb-3">
+                📌 Dán danh sách theo định dạng <code>email|password</code> (mỗi tài khoản 1 dòng). Hệ thống sẽ tự động lọc đúng OTP và chỉ kích hoạt duy nhất link <strong>TẠI ĐÂY</strong> hợp lệ[span_0](start_span)[span_0](end_span).
             </div>
 
             <div class="mb-3">
-                <label class="form-label">Danh sách email</label>
-                <textarea id="accountsInput" class="form-control" rows="6" placeholder="hadas13@fshare.dpdns.org|P235CIR9sHFH"></textarea>
+                <label class="form-label fw-bold">Danh sách tài khoản</label>
+                <textarea id="emailList" class="form-control" rows="5" placeholder="example@domain.com|password123"></textarea>
             </div>
 
-            <div class="btn-group-action">
-                <button id="btnRead" class="btn btn-read-mail">
-                    <i class="fa-solid fa-magnifying-glass"></i> Đọc mail
-                </button>
-                <button id="btnVerify" class="btn btn-auto-verify">
-                    <i class="fa-solid fa-bolt"></i> Xác minh tự động
-                </button>
-            </div>
-
-            <!-- Bảng hiển thị kết quả -->
-            <div id="resultContainer" class="mt-4 d-none">
-                <h6 class="fw-bold mb-3 border-bottom pb-2">KẾT QUẢ HIỂN THỊ:</h6>
-                <div id="resultContent"></div>
-            </div>
+            <button id="btnVerify" onclick="processEmails()" class="btn btn-primary px-4">
+                ⚡ Đọc Mail & Tự Động Xác Minh
+            </button>
         </div>
-    </div>
 
-    <div class="footer-text">
-        Giao diện tối giản, tối ưu hiển thị dữ liệu dạng bảng lớn.
-    </div>
-</div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const btnRead = document.getElementById('btnRead');
-    const btnVerify = document.getElementById('btnVerify');
-
-    btnRead.addEventListener('click', () => startProcess('read'));
-    btnVerify.addEventListener('click', () => startProcess('verify'));
-});
-
-async function startProcess(mode) {
-    const inputArea = document.getElementById('accountsInput');
-    const inputData = inputArea.value.trim();
-    
-    if (!inputData) {
-        alert("Vui lòng nhập danh sách tài khoản!");
-        inputArea.focus();
-        return;
-    }
-
-    const btnRead = document.getElementById('btnRead');
-    const btnVerify = document.getElementById('btnVerify');
-    const resultContainer = document.getElementById('resultContainer');
-    const resultContent = document.getElementById('resultContent');
-
-    btnRead.disabled = true;
-    btnVerify.disabled = true;
-
-    if (mode === 'verify') {
-        btnVerify.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang xác minh...';
-    } else {
-        btnRead.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang đọc mail...';
-    }
-
-    resultContainer.classList.remove('d-none');
-    resultContent.innerHTML = `
-        <div class="text-center py-4 text-primary">
-            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-            <span>Đang xử lý ...</span>
-        </div>
-    `;
-
-    try {
-        const response = await fetch('/process', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ accounts: inputData, mode: mode })
-        });
-
-        const data = await response.json();
-
-        // Xóa hoàn toàn trạng thái loading khi có phản hồi
-        resultContent.innerHTML = '';
-
-        if (response.ok && data.results) {
-            let html = `
+        <div class="card card-custom p-4 bg-white">
+            <h5 class="mb-3">Kết quả</h5>
             <div class="table-responsive">
-                <table class="table table-bordered table-hover align-middle mb-0" style="font-size: 13.5px;">
+                <table class="table table-hover">
                     <thead class="table-light">
                         <tr>
-                            <th style="width: 50px;" class="text-center">#</th>
-                            <th>Tài khoản / Email</th>
-                            <th style="width: 180px;">Trạng thái</th>
-                            <th>Link xác minh</th>
+                            <th>#</th>
+                            <th>Email</th>
+                            <th>Trạng thái Mail</th>
+                            <th>Mã OTP</th>
+                            <th>Trạng thái Tự Động Click Link</th>
+                            <th>Thao tác Link</th>
                         </tr>
                     </thead>
-                    <tbody>
-            `;
+                    <tbody id="resultTable">
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">Chưa có dữ liệu</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
-            data.results.forEach(item => {
-                const isSuccess = item.status === 'THÀNH CÔNG';
-                const badgeClass = isSuccess ? 'bg-success' : 'bg-danger';
-                
-                let linkDisplay = '<span class="text-muted">-</span>';
-                
-                if (item.link) {
-                    // Hiển thị nút "TẠI ĐÂY" bấm trực tiếp
-                    linkDisplay = `
-                        <a href="${item.link}" target="_blank" class="btn-tai-day">
-                            👉 TẠI ĐÂY
-                        </a>
-                    `;
+    <script>
+        async function processEmails() {
+            const rawText = document.getElementById('emailList').value.trim();
+            if (!rawText) {
+                alert('Vui lòng nhập danh sách email!');
+                return;
+            }
 
-                    // Nếu bấm "Xác minh tự động", tự động mở link xác minh luôn
-                    if (mode === 'verify') {
-                        window.open(item.link, '_blank');
-                    }
+            const lines = rawText.split('\n').filter(line => line.trim() !== '');
+            const btn = document.getElementById('btnVerify');
+            const tbody = document.getElementById('resultTable');
+
+            btn.disabled = true;
+            btn.innerHTML = '⌛ Đang xử lý & Bấm link ngầm...';
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center">Đang kết nối tới hòm thư và kích hoạt link TẠI ĐÂY...</td></tr>';
+
+            try {
+                const response = await fetch('/api/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ accounts: lines })
+                });
+
+                const data = await response.json();
+                tbody.innerHTML = '';
+
+                if (data.results && data.results.length > 0) {
+                    data.results.forEach((item, index) => {
+                        // Hiển thị OTP
+                        const isOtpNum = /^\d+$/.test(item.otp);
+                        const otpDisplay = isOtpNum 
+                            ? `<span class="badge bg-success otp-badge me-1">${item.otp}</span>
+                               <button onclick="copyText('${item.otp}')" class="btn btn-sm btn-outline-secondary py-0">Copy OTP</button>`
+                            : `<span class="badge bg-secondary">${item.otp}</span>`;
+
+                        // Hiển thị Trạng thái Kích hoạt Link
+                        const isSuccess = item.link_status && item.link_status.includes("Thành công");
+                        const linkStatusDisplay = `<span class="badge ${isSuccess ? 'bg-success' : 'bg-danger'}">${item.link_status}</span>`;
+
+                        // Hiển thị Nút Mở/Copy link thủ công
+                        const linkDisplay = item.link 
+                            ? `<a href="${item.link}" target="_blank" class="btn btn-sm btn-outline-primary me-1">Mở link</a>
+                               <button onclick="copyText('${item.link}')" class="btn btn-sm btn-outline-secondary py-0">Copy</button>`
+                            : `<span class="text-muted small">Không có link</span>`;
+
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td>${index + 1}</td>
+                            <td><strong>${item.email}</strong></td>
+                            <td><span class="badge ${item.status === 'Thành công' ? 'bg-primary' : 'bg-danger'}">${item.status}</span></td>
+                            <td>${otpDisplay}</td>
+                            <td>${linkStatusDisplay}</td>
+                            <td>${linkDisplay}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Không có kết quả trả về</td></tr>';
                 }
-
-                html += `
-                <tr>
-                    <td class="text-center fw-bold">${item.id}</td>
-                    <td class="fw-medium">${escapeHtml(item.email)}</td>
-                    <td><span class="badge ${badgeClass}">${escapeHtml(item.status)}</span></td>
-                    <td>${linkDisplay}</td>
-                </tr>`;
-            });
-
-            html += '</tbody></table></div>';
-            resultContent.innerHTML = html;
-
-        } else {
-            resultContent.innerHTML = `<div class="alert alert-danger mb-0">Lỗi: ${escapeHtml(data.error || 'Xử lý thất bại')}</div>`;
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Lỗi: ${err.message}</td></tr>`;
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '⚡ Đọc Mail & Tự Động Xác Minh';
+            }
         }
 
-    } catch (err) {
-        resultContent.innerHTML = `<div class="alert alert-danger mb-0">Lỗi kết nối tới Server Backend Python!</div>`;
-    } finally {
-        btnRead.disabled = false;
-        btnVerify.disabled = false;
-        btnRead.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Đọc mail';
-        btnVerify.innerHTML = '<i class="fa-solid fa-bolt"></i> Xác minh tự động';
-    }
-}
-
-function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-}
-</script>
+        function copyText(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Đã sao chép: ' + text);
+            });
+        }
+    </script>
 </body>
 </html>
