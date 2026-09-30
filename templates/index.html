@@ -34,15 +34,14 @@
         <h3>Danh sách email</h3>
         <p style="font-size: 13px; color: #666;">Nhập danh sách định dạng: <code>email|password</code> (Mỗi tài khoản 1 dòng)</p>
         
-        <!-- Dùng placeholder để chữ hiện mờ, bấm vào nhập là không cần xoá chữ cũ -->
-        <textarea id="emailInput" placeholder="Hãy nhập email của bạn (ví dụ: email|password)"></textarea>
+        <textarea id="emailInput" placeholder="Hãy nhập email của bạn"></textarea>
         
         <div class="btn-group">
             <button class="btn btn-read" id="btnRead" onclick="processVerify(false)">
                 📩 Đọc mail
             </button>
             <button class="btn btn-auto" id="btnAuto" onclick="processVerify(true)">
-                ⚡ Xác minh tự động
+                ⚡ Xác minh tự động (Mở tab)
             </button>
         </div>
     </div>
@@ -82,13 +81,16 @@
 
             const lines = input.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-            // Mở trước các tab trống trực tiếp từ thao tác click để qua mặt bộ chặn Pop-up di động
-            let newTabs = [];
+            // Mở sẵn danh sách tab ngay khi click để vượt rào cản Pop-up của Safari/Chrome
+            let openedTabs = [];
             if (isAutoClick) {
-                for (let i = 0; i < lines.length; i++) {
-                    let tab = window.open('about:blank', '_blank');
-                    newTabs.push(tab);
-                }
+                lines.forEach((_, idx) => {
+                    // Mở tab trống kích thước nhẹ
+                    let newTab = window.open('about:blank', '_blank');
+                    if (newTab) {
+                        openedTabs.push(newTab);
+                    }
+                });
             }
 
             btnRead.disabled = true;
@@ -101,7 +103,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         accounts: lines,
-                        auto_click: isAutoClick
+                        auto_click: false // Tắt kích hoạt backend, chuyển sang điều hướng tab trên frontend
                     })
                 });
 
@@ -111,22 +113,22 @@
                 if (data.results && data.results.length > 0) {
                     data.results.forEach((item, index) => {
                         const tr = document.createElement('tr');
-                        let linkStatusText = "Chưa bấm";
+                        let tabStatusNote = "";
 
-                        // Nếu chọn xác minh tự động và tìm thấy link
-                        if (isAutoClick && newTabs[index]) {
+                        // Điều hướng các tab đã tạo sẵn tới liên kết thực tế
+                        if (isAutoClick && openedTabs[index]) {
                             if (item.link) {
-                                newTabs[index].location.href = item.link; // Điều hướng tab đã mở sẵn tới link
-                                linkStatusText = "Đã mở tab xác minh";
+                                openedTabs[index].location.href = item.link;
+                                tabStatusNote = " (Đã mở tab)";
                             } else {
-                                newTabs[index].close(); // Đóng tab thừa nếu không có link
-                                linkStatusText = "Không có link";
+                                openedTabs[index].close(); // Đóng tab nếu không có link
+                                tabStatusNote = " (Chưa thấy yêu cầu đăng nhập)";
                             }
                         }
 
-                        let linkHtml = '<span style="color:#888;">Không có</span>';
+                        let linkHtml = '<span style="color:#888;">Chưa thấy yêu cầu đăng nhập</span>';
                         if (item.link) {
-                            linkHtml = `<a href="${item.link}" target="_blank" rel="noopener noreferrer" style="color: #1976d2;">Link</a> (${linkStatusText})`;
+                            linkHtml = `<a href="${item.link}" target="_blank" rel="noopener noreferrer" style="color: #1976d2;">Link</a>${tabStatusNote}`;
                         } else if (item.link_status) {
                             linkHtml = `<span style="color:#888;">${item.link_status}</span>`;
                         }
@@ -140,13 +142,12 @@
                         tbody.appendChild(tr);
                     });
                 } else {
-                    // Đóng tất cả tab nếu gặp lỗi
-                    newTabs.forEach(t => t && t.close());
+                    openedTabs.forEach(t => t && t.close());
                     tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: red;">Không nhận được dữ liệu!</td></tr>`;
                 }
 
             } catch (err) {
-                newTabs.forEach(t => t && t.close());
+                openedTabs.forEach(t => t && t.close());
                 tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: red;">Lỗi kết nối Server!</td></tr>`;
             } finally {
                 btnRead.disabled = false;
