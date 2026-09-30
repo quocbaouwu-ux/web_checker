@@ -6,10 +6,9 @@ from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
 
-# API Endpoint chính xác từ Cheapluxury
 CHEAPLUXURY_API_URL = "https://cheapluxurymail.xyz/login"
 
-def extract_otp_and_link(subject, body_text, body_html, auto_click=False):
+def extract_otp_and_link(subject, body_text, body_html):
     otp_code = "Không thấy OTP"
     verify_link = None
     
@@ -44,34 +43,10 @@ def extract_otp_and_link(subject, body_text, body_html, auto_click=False):
         if urls:
             verify_link = urls[0]
 
-    # 3. Kích hoạt Link ngầm ở Backend (mô phỏng trình duyệt thật)
-    link_status = "Chưa bấm"
-    if verify_link and auto_click:
-        session = requests.Session()
-        session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Connection': 'keep-alive'
-        })
-        try:
-            resp = session.get(verify_link, timeout=15, allow_redirects=True)
-            resp_text = resp.text.lower()
-            if resp.status_code == 200:
-                if any(k in resp_text for k in ["success", "thành công", "verified", "confirmed", "activated"]):
-                    link_status = "Đã xác minh thành công"
-                else:
-                    link_status = "Đã kích hoạt (Cần kiểm tra)"
-            else:
-                link_status = f"Lỗi HTTP {resp.status_code}"
-        except Exception as e:
-            link_status = f"Lỗi kích hoạt: {str(e)}"
+    return otp_code, verify_link
 
-    return otp_code, verify_link, link_status
-
-def check_single_account(email, password, auto_click=False):
+def check_single_account(email, password):
     try:
-        # Gọi API POST login theo tài liệu cheapluxurymail.xyz
         payload = {
             'email': email,
             'password': password
@@ -88,12 +63,11 @@ def check_single_account(email, password, auto_click=False):
                 "status": "Thất bại",
                 "otp": "N/A",
                 "link": None,
-                "link_status": f"API Lỗi HTTP {response.status_code}"
+                "link_status": f"Lỗi HTTP {response.status_code}"
             }
 
         res_data = response.json()
         
-        # Kiểm tra dữ liệu trả về từ API
         if res_data.get('response_code') == 200 or res_data.get('message') == "Login successful":
             emails_list = res_data.get('data', {}).get('emails', [])
             
@@ -106,20 +80,19 @@ def check_single_account(email, password, auto_click=False):
                     "link_status": "Chưa nhận được thư"
                 }
             
-            # Lấy email mới nhất (phần tử đầu tiên)
             latest_email = emails_list[0]
             subject = latest_email.get('subject', '')
             body_text = latest_email.get('body_text', '')
             body_html = latest_email.get('body_html', '')
 
-            otp, link, link_status = extract_otp_and_link(subject, body_text, body_html, auto_click=auto_click)
+            otp, link = extract_otp_and_link(subject, body_text, body_html)
 
             return {
                 "email": email,
                 "status": "Thành công",
                 "otp": otp,
                 "link": link,
-                "link_status": link_status
+                "link_status": "Có link" if link else "Không tìm thấy link"
             }
         else:
             msg = res_data.get('message', 'Đăng nhập không thành công')
@@ -128,7 +101,7 @@ def check_single_account(email, password, auto_click=False):
                 "status": "Thất bại",
                 "otp": "N/A",
                 "link": None,
-                "link_status": f"Lỗi API: {msg}"
+                "link_status": msg
             }
 
     except Exception as e:
@@ -137,7 +110,7 @@ def check_single_account(email, password, auto_click=False):
             "status": "Thất bại",
             "otp": "N/A",
             "link": None,
-            "link_status": f"Lỗi kết nối API: {str(e)}"
+            "link_status": f"Lỗi kết nối: {str(e)}"
         }
 
 @app.route('/')
@@ -148,7 +121,6 @@ def index():
 def api_verify():
     data = request.get_json() or {}
     accounts = data.get('accounts', [])
-    auto_click = data.get('auto_click', False)
 
     results = []
     for line in accounts:
@@ -156,7 +128,7 @@ def api_verify():
             parts = line.split('|')
             email = parts[0].strip()
             password = parts[1].strip()
-            res = check_single_account(email, password, auto_click=auto_click)
+            res = check_single_account(email, password)
             results.append(res)
         else:
             results.append({
