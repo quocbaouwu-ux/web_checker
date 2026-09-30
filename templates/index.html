@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Đọc Mail - Lấy OTP & Tự Động Xác Minh Browser</title>
+    <title>Đọc Mail & Lấy OTP</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background-color: #f8f9fa; font-family: system-ui, -apple-system, sans-serif; }
@@ -15,34 +15,34 @@
 <body>
     <div class="container py-4" style="max-width: 1050px;">
         <div class="card card-custom p-4 mb-4 bg-white">
-            <h4 class="mb-3">✉️ Đọc Mail: Lấy OTP & Xác Minh Browser</h4>
+            <h4 class="mb-3">✉️ Đọc Mail: Lấy OTP & Xác Minh Auto</h4>
             
             <div class="alert alert-info small mb-3">
-                📌 Dán danh sách theo định dạng <code>email|password</code>. Hệ thống sẽ lọc lấy mã OTP 6 số và tự động giả lập Browser xác minh link <strong>TẠI ĐÂY</strong>[span_3](start_span)[span_3](end_span).
+                📌 Dán danh sách <code>email|password</code>. Hệ thống sẽ lọc lấy mã OTP 6 số và tự động giả lập Browser xác minh link <strong>TẠI ĐÂY</strong>.
             </div>
 
             <div class="mb-3">
-                <label class="form-label fw-bold">Danh sách tài khoản</label>
-                <textarea id="emailList" class="form-control" rows="5" placeholder="example@domain.com|password123"></textarea>
+                <label class="form-label fw-bold">Danh sách email</label>
+                <textarea id="emailList" class="form-control" rows="5" placeholder="q.trimpe@namkhanh61.com|HI1K5xCsdPtF"></textarea>
             </div>
 
             <button id="btnVerify" onclick="processEmails()" class="btn btn-primary px-4">
-                ⚡ Đọc Mail & Xác Minh Auto
+                🔍 Đọc Mail
             </button>
         </div>
 
         <div class="card card-custom p-4 bg-white">
-            <h5 class="mb-3">Kết quả</h5>
+            <h5 class="mb-3">KẾT QUẢ HIỂN THỊ:</h5>
             <div class="table-responsive">
-                <table class="table table-hover">
+                <table class="table table-bordered table-hover align-middle">
                     <thead class="table-light">
                         <tr>
-                            <th>#</th>
-                            <th>Email</th>
-                            <th>Trạng thái Mail</th>
+                            <th style="width: 50px;">#</th>
+                            <th>Tài khoản / Email</th>
+                            <th>Trạng thái</th>
                             <th>Mã OTP</th>
-                            <th>Xác minh Tự động (Browser)</th>
-                            <th>Thao tác Link</th>
+                            <th>Xác minh Tự động</th>
+                            <th>Link xác minh</th>
                         </tr>
                     </thead>
                     <tbody id="resultTable">
@@ -68,8 +68,8 @@
             const tbody = document.getElementById('resultTable');
 
             btn.disabled = true;
-            btn.innerHTML = '⌛ Đang lấy OTP & Bấm link...';
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center">Đang kết nối hòm thư...</td></tr>';
+            btn.innerHTML = '⌛ Đang đọc mail...';
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center">Đang kết nối hòm thư và kiểm tra OTP...</td></tr>';
 
             try {
                 const response = await fetch('/api/verify', {
@@ -83,26 +83,25 @@
 
                 if (data.results && data.results.length > 0) {
                     data.results.forEach((item, index) => {
-                        // Kiểm tra nếu là mã OTP số 6 chữ số
+                        // Trình bày OTP (Chỉ lấy chuỗi 6 số)
                         const isOtpNum = /^\d{6}$/.test(item.otp);
                         const otpDisplay = isOtpNum 
                             ? `<span class="otp-text me-2">${item.otp}</span>
-                               <button onclick="copyText('${item.otp}')" class="btn btn-sm btn-outline-secondary py-0">Copy</button>`
+                               <button onclick="copyText('${item.otp}')" class="btn btn-sm btn-outline-secondary py-0">Copy OTP</button>`
                             : `<span class="badge bg-secondary">${item.otp}</span>`;
 
                         const isSuccess = item.link_status && item.link_status.includes("Thành công");
                         const linkStatusDisplay = `<span class="badge ${isSuccess ? 'bg-success' : 'bg-danger'}">${item.link_status}</span>`;
 
                         const linkDisplay = item.link 
-                            ? `<a href="${item.link}" target="_blank" class="btn btn-sm btn-outline-primary me-1">Mở Web</a>
-                               <button onclick="copyText('${item.link}')" class="btn btn-sm btn-outline-secondary py-0">Copy Link</button>`
+                            ? `<a href="${item.link}" target="_blank" class="btn btn-sm btn-primary">TẠI ĐÂY</a>`
                             : `<span class="text-muted small">Không có link</span>`;
 
                         const tr = document.createElement('tr');
                         tr.innerHTML = `
                             <td>${index + 1}</td>
                             <td><strong>${item.email}</strong></td>
-                            <td><span class="badge ${item.status === 'Thành công' ? 'bg-primary' : 'bg-danger'}">${item.status}</span></td>
+                            <td><span class="badge ${item.status === 'Thành công' ? 'bg-success' : 'bg-danger'}">${item.status}</span></td>
                             <td>${otpDisplay}</td>
                             <td>${linkStatusDisplay}</td>
                             <td>${linkDisplay}</td>
@@ -116,7 +115,7 @@
                 tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Lỗi: ${err.message}</td></tr>`;
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '⚡ Đọc Mail & Xác Minh Auto';
+                btn.innerHTML = '🔍 Đọc Mail';
             }
         }
 
