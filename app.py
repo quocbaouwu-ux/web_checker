@@ -10,12 +10,9 @@ from flask import Flask, render_template, request, jsonify
 app = Flask(__name__)
 
 CHEAPLUXURY_API_URL = "https://cheapluxurymail.xyz/login"
-
-# Xử lý đồng thời 20 tài khoản cùng lúc
 MAX_WORKERS = 20
 
 def is_within_15_minutes(date_str):
-    """Kiểm tra xem email có được gửi trong vòng 15 phút gần đây không"""
     if not date_str:
         return False
     try:
@@ -29,24 +26,20 @@ def is_within_15_minutes(date_str):
         
         now = datetime.now(timezone.utc)
         diff_in_seconds = (now - email_time).total_seconds()
-        
         return 0 <= diff_in_seconds <= 900
     except Exception:
         return True
 
-def extract_otp_and_link(subject, body_text, body_html):
-    """Bóc tách mã OTP 6 chữ số và Link xác minh"""
+def extract_otp_and_link(subject, body_text, body_html, auto_click=False):
     otp_code = "Không thấy OTP"
     verify_link = None
     
     full_text = f"{subject or ''} {body_text or ''} {body_html or ''}"
     
-    # 1. Tìm mã OTP 6 chữ số
     digits = re.findall(r'\b\d{6}\b', full_text)
     if digits:
         otp_code = digits[0]
 
-    # 2. Bóc tách Link xác minh từ HTML / Text
     target_html = body_html if body_html else body_text
     keywords = ["TẠI ĐÂY", "TAI DAY", "XÁC MINH", "XÁC NHẬN", "VERIFY", "CONFIRM", "CLICK", "ACTIVATE", "KÍCH HOẠT"]
     url_keywords = ["verify", "confirm", "activate", "token", "xac-minh", "kich-hoat"]
@@ -54,7 +47,6 @@ def extract_otp_and_link(subject, body_text, body_html):
     if target_html:
         try:
             soup = BeautifulSoup(target_html, 'html.parser')
-            # Ưu tiên tìm thẻ <a> có chứa từ khóa tiếng Việt / Anh
             for a_tag in soup.find_all('a', href=True):
                 text_inside = a_tag.get_text().strip().upper()
                 href = a_tag['href']
@@ -62,7 +54,6 @@ def extract_otp_and_link(subject, body_text, body_html):
                     verify_link = href
                     break
             
-            # Nếu chưa tìm thấy, lọc thẻ <a> có href chứa từ khóa xác minh
             if not verify_link:
                 for a_tag in soup.find_all('a', href=True):
                     href = a_tag['href'].lower()
@@ -72,7 +63,6 @@ def extract_otp_and_link(subject, body_text, body_html):
         except Exception:
             pass
 
-    # Lọc dự phòng từ full_text bằng Regex
     if not verify_link:
         urls = re.findall(r'(https?://[^\s<>"]+)', full_text)
         for url in urls:
@@ -85,16 +75,31 @@ def extract_otp_and_link(subject, body_text, body_html):
                 verify_link = url
                 break
 
-    link_status = "Có link" if verify_link else "Chưa thấy yêu cầu đăng nhập"
+    link_status = "Chưa thấy yêu cầu đăng nhập"
+    if verify_link:
+        # Nếu bật auto_click, Server sẽ tự kích hoạt link luôn mà không cần trình duyệt mở tab
+        if auto_click:
+            session = requests.Session()
+            session.headers.update({
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+            })
+            try:
+                resp = session.get(verify_link, timeout=8, allow_redirects=True)
+                if resp.status_code in [200, 301, 302]:
+                    link_status = "Đã xác minh (Server Auto)"
+                else:
+                    link_status = f"Lỗi HTTP {resp.status_code}"
+            except Exception:
+                link_status = "Lỗi kích hoạt"
+        else:
+            link_status = "Có link"
+
     return otp_code, verify_link, link_status
 
-def check_single_account(line):
-    """Xử lý đọc hòm thư cho từng dòng tài khoản"""
+def check_single_account(account_data):
+    line, auto_click = account_data
     line = line.strip()
-    if not line:
-        return None
-
-    if '|' not in line:
+    if not line or '|' not in line:
         return {
             "email": line,
             "status": "Thất bại",
@@ -152,7 +157,7 @@ def check_single_account(line):
             body_text = latest_email.get('body_text', '')
             body_html = latest_email.get('body_html', '')
 
-            otp, link, link_status = extract_otp_and_link(subject, body_text, body_html)
+            otp, link, link_status = extract_otp_and_link(subject, body_text, body_html, auto_click=auto_click)
 
             return {
                 "email": email,
@@ -162,13 +167,12 @@ def check_single_account(line):
                 "link_status": link_status
             }
         else:
-            msg = res_data.get('message', 'Đăng nhập không thành công')
             return {
                 "email": email,
                 "status": "Thất bại",
                 "otp": "N/A",
                 "link": None,
-                "link_status": msg
+                "link_status": res_data.get('message', 'Đăng nhập không thành công')
             }
 
     except Exception as e:
@@ -188,16 +192,15 @@ def index():
 def api_verify():
     data = request.get_json() or {}
     accounts = data.get('accounts', [])
+    auto_click = data.get('auto_click', False)
 
-    # Xử lý đa luồng (20 luồng chạy song song)
-    results = []
+    tasks = [(line, auto_click) for line in accounts]
+
+    # Xử lý 20 tài khoản cùng lúc trên Server
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        results = list(executor.map(check_single_account, accounts))
+        results = list(executor.map(check_single_account, tasks))
 
-    # Lọc bỏ các dòng rỗng (nếu có)
-    results = [r for r in results if r is not None]
-
-    return jsonify({"results": results})
+    return jsonify({"results": [r for r in results if r is not None]})
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
