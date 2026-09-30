@@ -9,7 +9,10 @@
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 20px; }
         .alert { background: #ffebee; color: #c62828; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 14px; }
         textarea { width: 100%; height: 120px; border: 1px solid #ddd; border-radius: 8px; padding: 10px; font-family: monospace; box-sizing: border-box; }
-        .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: 0.2s; }
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+        .btn { flex: 1; padding: 12px; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-read { background: #2196F3; color: white; }
+        .btn-read:hover { background: #1e88e5; }
         .btn-auto { background: #ffffff; color: #333; border: 1px solid #ddd; }
         .btn-auto:hover { background: #f0f0f0; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
@@ -28,11 +31,16 @@
     <div class="card">
         <h3>Danh sách email</h3>
         <p style="font-size: 13px; color: #666;">Nhập danh sách định dạng: <code>email|password</code> (Mỗi tài khoản 1 dòng)</p>
-        <textarea id="emailInput" placeholder="q.trimpe@namkhanh61.com|Hl1K5xCsdPtF"></textarea>
+        <textarea id="emailInput" placeholder="edroy.ermold@cheapluxury.indevs.in|Ga6bhwuLCM90"></textarea>
         
-        <button class="btn btn-auto" id="btnVerify" onclick="processVerify()">
-            ⚡ Xác minh tự động
-        </button>
+        <div class="btn-group">
+            <button class="btn btn-read" id="btnRead" onclick="processVerify(false)">
+                📩 Đọc mail
+            </button>
+            <button class="btn btn-auto" id="btnAuto" onclick="processVerify(true)">
+                ⚡ Xác minh tự động
+            </button>
+        </div>
     </div>
 
     <div class="card">
@@ -55,8 +63,9 @@
     </div>
 
     <script>
-        async function processVerify() {
-            const btn = document.getElementById('btnVerify');
+        async function processVerify(isAutoClick) {
+            const btnRead = document.getElementById('btnRead');
+            const btnAuto = document.getElementById('btnAuto');
             const input = document.getElementById('emailInput').value.trim();
             const tbody = document.getElementById('resultBody');
 
@@ -67,15 +76,18 @@
 
             const lines = input.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-            btn.disabled = true;
-            btn.innerText = "⌛ Đang xác minh tự động...";
-            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;">Đang kiểm tra ${lines.length} tài khoản...</td></tr>`;
+            btnRead.disabled = true;
+            btnAuto.disabled = true;
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;">Đang xử lý ${lines.length} tài khoản...</td></tr>`;
 
             try {
                 const response = await fetch('/api/verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ accounts: lines })
+                    body: JSON.stringify({ 
+                        accounts: lines,
+                        auto_click: isAutoClick 
+                    })
                 });
 
                 const data = await response.json();
@@ -107,8 +119,8 @@
             } catch (err) {
                 tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: red;">Lỗi kết nối Server!</td></tr>`;
             } finally {
-                btn.disabled = false;
-                btn.innerText = "⚡ Xác minh tự động";
+                btnRead.disabled = false;
+                btnAuto.disabled = false;
             }
         }
     </script>
