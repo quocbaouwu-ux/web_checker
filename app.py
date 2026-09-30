@@ -6,22 +6,22 @@ from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
-def extract_otp_and_link(subject, body_text, body_html):
+def extract_otp_and_link(subject, body_text, body_html, auto_click=False):
     otp_code = "Không thấy OTP"
     verify_link = None
     
-    # 1. Tìm mã OTP 6 số
+    # 1. Quét tìm mã OTP (ưu tiên 6 chữ số)
     full_text = f"{subject} {body_text} {body_html}"
     digits = re.findall(r'\b\d{6}\b', full_text)
     if digits:
         otp_code = digits[0]
 
-    # 2. Tìm link TẠI ĐÂY / XÁC MINH
+    # 2. Quét tìm link xác minh
     target_html = body_html if body_html else body_text
     
     try:
         soup = BeautifulSoup(target_html, 'html.parser')
-        # Tìm qua thẻ <a>
+        # Tìm qua thẻ <a> theo từ khóa
         for a_tag in soup.find_all('a', href=True):
             text_inside = a_tag.get_text().strip().upper()
             href = a_tag['href']
@@ -31,7 +31,7 @@ def extract_otp_and_link(subject, body_text, body_html):
                 verify_link = href
                 break
                 
-        # Nếu không thấy từ khóa, lấy link http/https đầu tiên trong thẻ <a>
+        # Nếu không có từ khóa, lấy link http/https đầu tiên trong thẻ <a>
         if not verify_link:
             all_links = [a['href'] for a in soup.find_all('a', href=True) if 'http' in a['href']]
             if all_links:
@@ -39,28 +39,31 @@ def extract_otp_and_link(subject, body_text, body_html):
     except Exception:
         pass
 
-    # Nếu mail dạng text thuần không có thẻ a, quét link bằng Regex
+    # Nếu mail dạng text thuần, dùng Regex trích xuất link
     if not verify_link:
         urls = re.findall(r'(https?://[^\s<>"]+)', full_text)
         if urls:
             verify_link = urls[0]
 
-    # 3. TỰ ĐỘNG BẤM LINK (Auto Click)
-    link_status = "Không tìm thấy link"
+    # 3. TỰ ĐỘNG BẤM LINK (Chỉ thực hiện nếu auto_click=True)
+    link_status = "Không bấm"
     if verify_link:
-        try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-            }
-            resp = requests.get(verify_link, headers=headers, timeout=10, allow_redirects=True)
-            
-            if resp.status_code in [200, 201, 202, 204]:
-                link_status = "Đã bấm (Thành công)"
-            else:
-                link_status = f"Lỗi HTTP {resp.status_code}"
-        except Exception:
-            link_status = "Lỗi khi kích hoạt link"
+        if auto_click:
+            try:
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                }
+                resp = requests.get(verify_link, headers=headers, timeout=10, allow_redirects=True)
+                
+                if resp.status_code in [200, 201, 202, 204]:
+                    link_status = "Đã bấm (Thành công)"
+                else:
+                    link_status = f"Lỗi HTTP {resp.status_code}"
+            except Exception:
+                link_status = "Lỗi khi kích hoạt link"
+        else:
+            link_status = "Chưa bấm"
 
     return otp_code, verify_link, link_status
 
@@ -75,6 +78,7 @@ def verify_accounts():
     try:
         data = request.get_json(silent=True) or {}
         account_lines = data.get('accounts', [])
+        auto_click = data.get('auto_click', False)  # Nhận tham số tự động bấm từ giao diện
         results = []
 
         for line in account_lines:
@@ -125,7 +129,7 @@ def verify_accounts():
                         body_text = latest_mail.get("body_text", "")
                         body_html = latest_mail.get("body_html", "")
 
-                        otp_code, verify_link, link_status = extract_otp_and_link(subject, body_text, body_html)
+                        otp_code, verify_link, link_status = extract_otp_and_link(subject, body_text, body_html, auto_click=auto_click)
 
                         results.append({
                             "email": email_user,
