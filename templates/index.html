@@ -33,10 +33,9 @@
     <div class="card">
         <h3>Danh sách email</h3>
         <p style="font-size: 13px; color: #666;">Nhập danh sách định dạng: <code>email|password</code> (Mỗi tài khoản 1 dòng)</p>
-        <!-- Thêm sẵn dữ liệu ví dụ thực tế trực tiếp vào nội dung textarea -->
-        <textarea id="emailInput">balqis.boothe@hanabi.indevs.in|Iv2Uxwff2Y4E
-user2@hanabi.indevs.in|PassWord123
-user3@hanabi.indevs.in|PassWord456</textarea>
+        
+        <!-- Dùng placeholder để chữ hiện mờ, bấm vào nhập là không cần xoá chữ cũ -->
+        <textarea id="emailInput" placeholder="Hãy nhập email của bạn (ví dụ: email|password)"></textarea>
         
         <div class="btn-group">
             <button class="btn btn-read" id="btnRead" onclick="processVerify(false)">
@@ -83,6 +82,15 @@ user3@hanabi.indevs.in|PassWord456</textarea>
 
             const lines = input.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
+            // Mở trước các tab trống trực tiếp từ thao tác click để qua mặt bộ chặn Pop-up di động
+            let newTabs = [];
+            if (isAutoClick) {
+                for (let i = 0; i < lines.length; i++) {
+                    let tab = window.open('about:blank', '_blank');
+                    newTabs.push(tab);
+                }
+            }
+
             btnRead.disabled = true;
             btnAuto.disabled = true;
             tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;">Đang xử lý ${lines.length} tài khoản...</td></tr>`;
@@ -101,12 +109,24 @@ user3@hanabi.indevs.in|PassWord456</textarea>
                 tbody.innerHTML = '';
 
                 if (data.results && data.results.length > 0) {
-                    data.results.forEach(item => {
+                    data.results.forEach((item, index) => {
                         const tr = document.createElement('tr');
+                        let linkStatusText = "Chưa bấm";
+
+                        // Nếu chọn xác minh tự động và tìm thấy link
+                        if (isAutoClick && newTabs[index]) {
+                            if (item.link) {
+                                newTabs[index].location.href = item.link; // Điều hướng tab đã mở sẵn tới link
+                                linkStatusText = "Đã mở tab xác minh";
+                            } else {
+                                newTabs[index].close(); // Đóng tab thừa nếu không có link
+                                linkStatusText = "Không có link";
+                            }
+                        }
 
                         let linkHtml = '<span style="color:#888;">Không có</span>';
                         if (item.link) {
-                            linkHtml = `<a href="${item.link}" target="_blank" rel="noopener noreferrer" style="color: #1976d2;">Link</a> (${item.link_status})`;
+                            linkHtml = `<a href="${item.link}" target="_blank" rel="noopener noreferrer" style="color: #1976d2;">Link</a> (${linkStatusText})`;
                         } else if (item.link_status) {
                             linkHtml = `<span style="color:#888;">${item.link_status}</span>`;
                         }
@@ -120,10 +140,13 @@ user3@hanabi.indevs.in|PassWord456</textarea>
                         tbody.appendChild(tr);
                     });
                 } else {
+                    // Đóng tất cả tab nếu gặp lỗi
+                    newTabs.forEach(t => t && t.close());
                     tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: red;">Không nhận được dữ liệu!</td></tr>`;
                 }
 
             } catch (err) {
+                newTabs.forEach(t => t && t.close());
                 tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: red;">Lỗi kết nối Server!</td></tr>`;
             } finally {
                 btnRead.disabled = false;
