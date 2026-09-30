@@ -11,57 +11,51 @@ app = Flask(__name__)
 
 def extract_and_trigger_shopee(subject, body):
     """
-    1. Trích xuất OTP 6 chữ số từ email Shopee.
-    2. Kiểm tra và chỉ lấy ĐÚNG link "TẠI ĐÂY" thuộc câu xác nhận đăng nhập.
-    3. Tự động gửi request GET (click ngầm) để kích hoạt link.
+    1. Chỉ quét lấy chuỗi 6 chữ số OTP.
+    2. Lấy link xác nhận 'TẠI ĐÂY'.
+    3. Gửi Request mô phỏng Browser để kích hoạt trên Web (tránh bị nhảy app).
     """
     otp_code = "Không tìm thấy OTP"
     verify_link = None
     full_text = f"{subject} {body}"
 
-    # 1. TRÍCH XUẤT OTP 6 CHỮ SỐ
-    otp_match = re.search(r'Mã xác minh tài khoản Shopee của bạn là:\s*(\d{6})', full_text, re.IGNORECASE)
-    if otp_match:
-        otp_code = otp_match.group(1)
-    else:
-        generic_match = re.search(r'\b(\d{6})\b', full_text)
-        if generic_match:
-            otp_code = generic_match.group(1)
+    # 1. CHỈ QUÉT LẤY DÃY 6 CHỮ SỐ (OTP)
+    # Tìm tất cả chuỗi 6 chữ số liên tiếp
+    digits = re.findall(r'\b\d{6}\b', full_text)
+    if digits:
+        otp_code = digits[0]  # Lấy mã 6 số đầu tiên tìm thấy
 
-    # 2. BẮT CHÍNH XÁC LINK "TẠI ĐÂY" NẰM TRONG CÂU XÁC NHẬN ĐĂNG NHẬP
+    # 2. BẮT LINK TẠI ĐÂY
     try:
         soup = BeautifulSoup(body, 'html.parser')
-        
-        # Lọc tất cả các thẻ <a> chứa liên kết
         for a_tag in soup.find_all('a', href=True):
             text_inside = a_tag.get_text().strip().upper()
-            
-            # Kiểm tra text hiển thị của liên kết có chứa "TẠI ĐÂY"
             if "TẠI ĐÂY" in text_inside or "TAI DAY" in text_inside:
-                # Kiểm tra văn bản của phần tử cha để đảm bảo đúng ngữ cảnh câu xác nhận
-                parent_text = a_tag.parent.get_text() if a_tag.parent else ""
-                
-                # Kiểm tra các từ khóa đặc trưng trong câu thông báo của Shopee
-                if any(kw in parent_text.lower() for kw in ['đăng nhập', 'dang nhap', 'xác nhận', 'xac nhan', 'hiệu lực', 'hieu luc']):
-                    verify_link = a_tag['href']
-                    break
+                verify_link = a_tag['href']
+                break
     except Exception:
         pass
 
-    # 3. KÍCH HOẠT LINK VÀ XỬ LÝ TRẠNG THÁI
-    # Mặc định nếu không tìm thấy đúng link chuẩn sẽ báo không thành công
-    link_status = "Không thành công (Không tìm thấy link TẠI ĐÂY hợp lệ)"
+    # 3. KÍCH HOẠT LINK BẰNG GIẢ LẬP TRÌNH DUYỆT WEB (WEB BROWSER)
+    link_status = "Không thành công (Không thấy link TẠI ĐÂY)"
     
     if verify_link:
         try:
+            # Header mô phỏng Browser trên máy tính để Shopee xác nhận bằng Web (không nhảy sang App)
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Sec-Ch-Ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+                'Sec-Ch-Ua-Mobile': '?0',
+                'Sec-Ch-Ua-Platform': '"Windows"',
+                'Upgrade-Insecure-Requests': '1'
             }
-            resp = requests.get(verify_link, headers=headers, timeout=10)
+            resp = requests.get(verify_link, headers=headers, timeout=12, allow_redirects=True)
             if resp.status_code == 200:
-                link_status = "Đã tự động xác minh (Thành công)"
+                link_status = "Đã tự động xác minh Browser (Thành công)"
             else:
-                link_status = f"Không thành công (HTTP {resp.status_code})"
+                link_status = f"Đã bấm link (HTTP {resp.status_code})"
         except Exception as e:
             link_status = f"Lỗi kích hoạt: {str(e)}"
 
@@ -106,10 +100,10 @@ def verify_accounts():
             results.append({
                 "email": email_user,
                 "status": "Lỗi",
-                "otp": "Thiếu Mật Khẩu",
+                "otp": "Thiếu Pass",
                 "link": None,
                 "link_status": "Không thành công",
-                "message": "Định dạng sai (Cần email|password)"
+                "message": "Thiếu mật khẩu"
             })
             continue
 
@@ -164,7 +158,7 @@ def verify_accounts():
 
             mail.logout()
 
-            # Trích xuất OTP và Tự động Bấm Link Xác Minh
+            # Trích xuất OTP và Tự động Bấm Link
             otp_code, verify_link, link_status = extract_and_trigger_shopee(subject, body)
 
             results.append({
@@ -172,17 +166,16 @@ def verify_accounts():
                 "status": "Thành công",
                 "otp": otp_code,
                 "link": verify_link,
-                "link_status": link_status,
-                "subject": subject[:40] + "..." if len(subject) > 40 else subject
+                "link_status": link_status
             })
 
         except Exception as e:
             results.append({
                 "email": email_user,
                 "status": "Lỗi",
-                "otp": "Lỗi kết nối",
+                "otp": "Lỗi IMAP",
                 "link": None,
-                "link_status": "Lỗi kết nối IMAP",
+                "link_status": "Lỗi kết nối",
                 "message": str(e)
             })
 
