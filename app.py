@@ -11,8 +11,6 @@ from flask import Flask, render_template, request, jsonify
 app = Flask(__name__)
 
 CHEAPLUXURY_API_URL = "https://cheapluxurymail.xyz/login"
-
-# Giảm xuống 8-10 luồng để API không bị nghẽn
 MAX_WORKERS = 8
 
 def is_within_15_minutes(date_str):
@@ -99,18 +97,16 @@ def check_single_account(line):
     payload = {'email': email, 'password': password}
     headers = {'Content-Type': 'application/json'}
     
-    # Thử kết nối lại tối đa 2 lần nếu timeout
     max_retries = 2
     response = None
 
     for attempt in range(max_retries):
         try:
-            # Tăng timeout lên 25 giây
             response = requests.post(CHEAPLUXURY_API_URL, json=payload, headers=headers, timeout=25)
             break
-        except requests.exceptions.RequestException as e:
+        except requests.exceptions.RequestException:
             if attempt < max_retries - 1:
-                time.sleep(1) # Chờ 1s rồi gửi lại
+                time.sleep(1)
             else:
                 return {
                     "email": email,
