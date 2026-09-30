@@ -8,36 +8,36 @@
     <style>
         body { background-color: #f8f9fa; font-family: system-ui, -apple-system, sans-serif; }
         .card-custom { border-radius: 12px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        .otp-text { font-size: 1.2rem; font-weight: bold; letter-spacing: 2px; color: #d93025; }
+        .otp-code { font-size: 1.25rem; font-weight: bold; color: #d93025; letter-spacing: 2px; }
         .table td { vertical-align: middle; }
     </style>
 </head>
 <body>
     <div class="container py-4" style="max-width: 1050px;">
+        <div class="alert alert-danger text-center fw-bold small mb-3">
+            ⚠️ LƯU Ý: Hòm thư chỉ tồn tại trong vòng 3 ngày, sau 3 ngày sẽ xoá.
+        </div>
+
         <div class="card card-custom p-4 mb-4 bg-white">
-            <h4 class="mb-3">✉️ Đọc Mail: Lấy OTP & Xác Minh Auto</h4>
+            <h5 class="mb-3 fw-bold">Danh sách email</h5>
             
-            <div class="alert alert-info small mb-3">
-                📌 Dán danh sách <code>email|password</code>. Hệ thống sẽ lọc lấy mã OTP 6 số và tự động giả lập Browser xác minh link <strong>TẠI ĐÂY</strong>.
-            </div>
-
             <div class="mb-3">
-                <label class="form-label fw-bold">Danh sách email</label>
-                <textarea id="emailList" class="form-control" rows="5" placeholder="q.trimpe@namkhanh61.com|HI1K5xCsdPtF"></textarea>
+                <textarea id="emailList" class="form-control" rows="4" placeholder="q.trimpe@namkhanh61.com|HI1K5xCsdPtF"></textarea>
             </div>
 
-            <button id="btnVerify" onclick="processEmails()" class="btn btn-primary px-4">
-                🔍 Đọc Mail
-            </button>
+            <div class="d-flex gap-2">
+                <button id="btnVerify" onclick="processEmails()" class="btn btn-primary px-4">
+                    🔍 Đọc mail
+                </button>
+            </div>
         </div>
 
         <div class="card card-custom p-4 bg-white">
-            <h5 class="mb-3">KẾT QUẢ HIỂN THỊ:</h5>
+            <h6 class="fw-bold mb-3">KẾT QUẢ HIỂN THỊ:</h6>
             <div class="table-responsive">
                 <table class="table table-bordered table-hover align-middle">
                     <thead class="table-light">
                         <tr>
-                            <th style="width: 50px;">#</th>
                             <th>Tài khoản / Email</th>
                             <th>Trạng thái</th>
                             <th>Mã OTP</th>
@@ -47,10 +47,13 @@
                     </thead>
                     <tbody id="resultTable">
                         <tr>
-                            <td colspan="6" class="text-center text-muted">Chưa có dữ liệu</td>
+                            <td colspan="5" class="text-center text-muted">Chưa có dữ liệu</td>
                         </tr>
                     </tbody>
                 </table>
+            </div>
+            <div class="text-center text-muted small mt-3">
+                Giao diện tối giản, tối ưu hiển thị dữ liệu dạng bảng lớn.
             </div>
         </div>
     </div>
@@ -68,8 +71,8 @@
             const tbody = document.getElementById('resultTable');
 
             btn.disabled = true;
-            btn.innerHTML = '⌛ Đang đọc mail...';
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center">Đang kết nối hòm thư và kiểm tra OTP...</td></tr>';
+            btn.innerHTML = '⌛ Đang đọc...';
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center">Đang kiểm tra hòm thư...</td></tr>';
 
             try {
                 const response = await fetch('/api/verify', {
@@ -82,40 +85,39 @@
                 tbody.innerHTML = '';
 
                 if (data.results && data.results.length > 0) {
-                    data.results.forEach((item, index) => {
-                        // Trình bày OTP (Chỉ lấy chuỗi 6 số)
-                        const isOtpNum = /^\d{6}$/.test(item.otp);
-                        const otpDisplay = isOtpNum 
-                            ? `<span class="otp-text me-2">${item.otp}</span>
-                               <button onclick="copyText('${item.otp}')" class="btn btn-sm btn-outline-secondary py-0">Copy OTP</button>`
+                    data.results.forEach((item) => {
+                        // Kiểm tra nếu OTP là dẫy 6 số
+                        const isNumber = /^\d{6}$/.test(item.otp);
+                        const otpHTML = isNumber 
+                            ? `<span class="otp-code me-2">${item.otp}</span>
+                               <button onclick="copyText('${item.otp}')" class="btn btn-sm btn-outline-secondary py-0">Copy</button>`
                             : `<span class="badge bg-secondary">${item.otp}</span>`;
 
                         const isSuccess = item.link_status && item.link_status.includes("Thành công");
-                        const linkStatusDisplay = `<span class="badge ${isSuccess ? 'bg-success' : 'bg-danger'}">${item.link_status}</span>`;
+                        const linkStatusHTML = `<span class="badge ${isSuccess ? 'bg-success' : 'bg-danger'}">${item.link_status}</span>`;
 
-                        const linkDisplay = item.link 
-                            ? `<a href="${item.link}" target="_blank" class="btn btn-sm btn-primary">TẠI ĐÂY</a>`
+                        const linkHTML = item.link 
+                            ? `<a href="${item.link}" target="_blank" class="btn btn-sm btn-primary">👈 TẠI ĐÂY</a>`
                             : `<span class="text-muted small">Không có link</span>`;
 
                         const tr = document.createElement('tr');
                         tr.innerHTML = `
-                            <td>${index + 1}</td>
                             <td><strong>${item.email}</strong></td>
-                            <td><span class="badge ${item.status === 'Thành công' ? 'bg-success' : 'bg-danger'}">${item.status}</span></td>
-                            <td>${otpDisplay}</td>
-                            <td>${linkStatusDisplay}</td>
-                            <td>${linkDisplay}</td>
+                            <td><span class="badge ${item.status === 'Thành công' ? 'bg-success' : 'bg-danger'}">${item.status.toUpperCase()}</span></td>
+                            <td>${otpHTML}</td>
+                            <td>${linkStatusHTML}</td>
+                            <td>${linkHTML}</td>
                         `;
                         tbody.appendChild(tr);
                     });
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Không có kết quả trả về</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Không có dữ liệu</td></tr>';
                 }
             } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Lỗi: ${err.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Lỗi: ${err.message}</td></tr>`;
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '🔍 Đọc Mail';
+                btn.innerHTML = '🔍 Đọc mail';
             }
         }
 
