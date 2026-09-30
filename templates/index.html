@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>mail</title>
+    <title>Web Checker Mail</title>
     <style>
         * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
         body { background-color: #f4f5f7; margin: 0; padding: 16px; color: #333; }
@@ -88,6 +88,19 @@
 
             const lines = input.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
+            // Mở trước các tab rỗng NGAY LÚC CLICK để giữ User Gesture trên PC
+            let openedTabs = [];
+            if (isOpenTabs) {
+                for (let i = 0; i < lines.length; i++) {
+                    try {
+                        let win = window.open('about:blank', '_blank');
+                        openedTabs.push(win);
+                    } catch (e) {
+                        openedTabs.push(null);
+                    }
+                }
+            }
+
             btnRead.disabled = true;
             btnAuto.disabled = true;
             tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;" class="text-muted">Đang quét ${lines.length} tài khoản...</td></tr>`;
@@ -103,27 +116,30 @@
                 tbody.innerHTML = '';
 
                 if (data.results && data.results.length > 0) {
-                    data.results.forEach((item) => {
+                    data.results.forEach((item, index) => {
                         const tr = document.createElement('tr');
                         let linkHtml = `<span class="text-muted">${item.link_status || 'Chưa thấy link'}</span>`;
 
                         if (item.link) {
                             if (isOpenTabs) {
-                                // TỰ ĐỘNG KÍCH HOẠT LINK NGẦM BẰNG IFRAME (KHÔNG BỊ CHẶN POP-UP)
-                                const iframe = document.createElement('iframe');
-                                iframe.style.display = 'none';
-                                iframe.src = item.link;
-                                document.body.appendChild(iframe);
-
-                                // Xóa iframe sau 10 giây
-                                setTimeout(() => iframe.remove(), 10000);
-
-                                linkHtml = `<a href="${item.link}" target="_blank" class="link-btn">Link</a> <span class="badge-success">(Đã kích hoạt ngầm)</span>`;
+                                // Kiểm tra tab rỗng đã mở trước đó có bị Chrome chặn không
+                                if (openedTabs[index] && !openedTabs[index].closed) {
+                                    openedTabs[index].location.href = item.link;
+                                    linkHtml = `<a href="${item.link}" target="_blank" class="link-btn">Link</a> <span class="badge-success">(Đã mở tab)</span>`;
+                                } else {
+                                    linkHtml = `<a href="${item.link}" target="_blank" class="link-btn">Link</a> <span class="status-error-text">(Bị trình duyệt chặn)</span>`;
+                                }
                             } else {
                                 linkHtml = `<a href="${item.link}" target="_blank" class="link-btn">Link</a>`;
                             }
-                        } else if (item.status === 'Thất bại') {
-                            linkHtml = `<span class="status-error-text">${item.link_status || 'Lỗi'}</span>`;
+                        } else {
+                            // Đóng tab rỗng thừa nếu tài khoản này không có link
+                            if (openedTabs[index] && !openedTabs[index].closed) {
+                                openedTabs[index].close();
+                            }
+                            if (item.status === 'Thất bại') {
+                                linkHtml = `<span class="status-error-text">${item.link_status || 'Lỗi'}</span>`;
+                            }
                         }
 
                         tr.innerHTML = `
@@ -135,10 +151,12 @@
                         tbody.appendChild(tr);
                     });
                 } else {
+                    openedTabs.forEach(t => t && !t.closed && t.close());
                     tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;" class="status-error-text">Không nhận được dữ liệu phản hồi!</td></tr>`;
                 }
 
             } catch (err) {
+                openedTabs.forEach(t => t && !t.closed && t.close());
                 tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;" class="status-error-text">Lỗi kết nối Server!</td></tr>`;
             } finally {
                 btnRead.disabled = false;
