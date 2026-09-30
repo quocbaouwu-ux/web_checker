@@ -3,22 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Đọc Mail - OTP & Tự Động Xác Minh Shopee</title>
+    <title>Đọc Mail - Lấy OTP & Tự Động Xác Minh Browser</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background-color: #f8f9fa; font-family: system-ui, -apple-system, sans-serif; }
         .card-custom { border-radius: 12px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        .otp-badge { font-size: 1.1rem; font-weight: bold; letter-spacing: 2px; }
+        .otp-text { font-size: 1.2rem; font-weight: bold; letter-spacing: 2px; color: #d93025; }
         .table td { vertical-align: middle; }
     </style>
 </head>
 <body>
     <div class="container py-4" style="max-width: 1050px;">
         <div class="card card-custom p-4 mb-4 bg-white">
-            <h4 class="mb-3">✉️️ Đọc Mail: OTP & Tự Động Click Xác Minh Shopee</h4>
+            <h4 class="mb-3">✉️ Đọc Mail: Lấy OTP & Xác Minh Browser</h4>
             
             <div class="alert alert-info small mb-3">
-                📌 Dán danh sách theo định dạng <code>email|password</code> (mỗi tài khoản 1 dòng). Hệ thống sẽ tự động lọc đúng OTP và chỉ kích hoạt duy nhất link <strong>TẠI ĐÂY</strong> hợp lệ[span_0](start_span)[span_0](end_span).
+                📌 Dán danh sách theo định dạng <code>email|password</code>. Hệ thống sẽ lọc lấy mã OTP 6 số và tự động giả lập Browser xác minh link <strong>TẠI ĐÂY</strong>[span_3](start_span)[span_3](end_span).
             </div>
 
             <div class="mb-3">
@@ -27,7 +27,7 @@
             </div>
 
             <button id="btnVerify" onclick="processEmails()" class="btn btn-primary px-4">
-                ⚡ Đọc Mail & Tự Động Xác Minh
+                ⚡ Đọc Mail & Xác Minh Auto
             </button>
         </div>
 
@@ -41,7 +41,7 @@
                             <th>Email</th>
                             <th>Trạng thái Mail</th>
                             <th>Mã OTP</th>
-                            <th>Trạng thái Tự Động Click Link</th>
+                            <th>Xác minh Tự động (Browser)</th>
                             <th>Thao tác Link</th>
                         </tr>
                     </thead>
@@ -68,8 +68,8 @@
             const tbody = document.getElementById('resultTable');
 
             btn.disabled = true;
-            btn.innerHTML = '⌛ Đang xử lý & Bấm link ngầm...';
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center">Đang kết nối tới hòm thư và kích hoạt link TẠI ĐÂY...</td></tr>';
+            btn.innerHTML = '⌛ Đang lấy OTP & Bấm link...';
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center">Đang kết nối hòm thư...</td></tr>';
 
             try {
                 const response = await fetch('/api/verify', {
@@ -83,21 +83,19 @@
 
                 if (data.results && data.results.length > 0) {
                     data.results.forEach((item, index) => {
-                        // Hiển thị OTP
-                        const isOtpNum = /^\d+$/.test(item.otp);
+                        // Kiểm tra nếu là mã OTP số 6 chữ số
+                        const isOtpNum = /^\d{6}$/.test(item.otp);
                         const otpDisplay = isOtpNum 
-                            ? `<span class="badge bg-success otp-badge me-1">${item.otp}</span>
-                               <button onclick="copyText('${item.otp}')" class="btn btn-sm btn-outline-secondary py-0">Copy OTP</button>`
+                            ? `<span class="otp-text me-2">${item.otp}</span>
+                               <button onclick="copyText('${item.otp}')" class="btn btn-sm btn-outline-secondary py-0">Copy</button>`
                             : `<span class="badge bg-secondary">${item.otp}</span>`;
 
-                        // Hiển thị Trạng thái Kích hoạt Link
                         const isSuccess = item.link_status && item.link_status.includes("Thành công");
                         const linkStatusDisplay = `<span class="badge ${isSuccess ? 'bg-success' : 'bg-danger'}">${item.link_status}</span>`;
 
-                        // Hiển thị Nút Mở/Copy link thủ công
                         const linkDisplay = item.link 
-                            ? `<a href="${item.link}" target="_blank" class="btn btn-sm btn-outline-primary me-1">Mở link</a>
-                               <button onclick="copyText('${item.link}')" class="btn btn-sm btn-outline-secondary py-0">Copy</button>`
+                            ? `<a href="${item.link}" target="_blank" class="btn btn-sm btn-outline-primary me-1">Mở Web</a>
+                               <button onclick="copyText('${item.link}')" class="btn btn-sm btn-outline-secondary py-0">Copy Link</button>`
                             : `<span class="text-muted small">Không có link</span>`;
 
                         const tr = document.createElement('tr');
@@ -118,7 +116,7 @@
                 tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Lỗi: ${err.message}</td></tr>`;
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '⚡ Đọc Mail & Tự Động Xác Minh';
+                btn.innerHTML = '⚡ Đọc Mail & Xác Minh Auto';
             }
         }
 
