@@ -46,36 +46,35 @@
             font-weight: 700;
         }
 
-        .file-upload-box {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 14px;
-        }
-
-        .file-input-label {
-            background-color: #f3f4f6;
-            border: 1px solid #d1d5db;
-            padding: 10px 14px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .file-input-label:hover {
-            background-color: #e5e7eb;
-        }
-
-        .file-name-info {
+        .card p.sub-text {
+            color: #777;
             font-size: 13px;
-            color: #4b5563;
+            margin-top: 0;
+            margin-bottom: 12px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 120px;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 13px;
+            outline: none;
+            resize: vertical;
+            background-color: #fafafa;
+        }
+
+        textarea:focus {
+            border-color: #3b82f6;
+            background-color: #fff;
         }
 
         .btn-group {
             display: flex;
             gap: 10px;
-            margin-top: 10px;
+            margin-top: 14px;
         }
 
         .btn {
@@ -174,20 +173,17 @@
     </div>
 
     <div class="card">
-        <h3>Danh sách tài khoản</h3>
+        <h3>Danh sách email</h3>
+        <p class="sub-text">Nhập danh sách định dạng: <code>email|password</code> (Mỗi tài khoản 1 dòng)</p>
         
-        <div class="file-upload-box">
-            <label class="file-input-label" for="fileInput">📁 Chọn file tài khoản (.txt)</label>
-            <input type="file" id="fileInput" accept=".txt,.csv" style="display: none;" onchange="handleFileSelect(event)">
-            <span class="file-name-info" id="fileNameInfo">Chưa chọn file nào</span>
-        </div>
-
+        <textarea id="emailInput" placeholder="Vui lòng nhập tài khoản|mật khẩu vào (Mỗi tài khoản 1 dòng)"></textarea>
+        
         <div class="btn-group">
             <button class="btn btn-read" id="btnRead" onclick="processVerify(false)">
                 📩 Đọc mail
             </button>
             <button class="btn btn-auto" id="btnAuto" onclick="processVerify(true)">
-                ⚡ Xác minh tự động (Mở Tab)
+                ⚡ Xác minh tự động
             </button>
         </div>
     </div>
@@ -206,7 +202,7 @@
                 </thead>
                 <tbody id="resultBody">
                     <tr>
-                        <td colspan="4" style="text-align: center;" class="text-muted">Chưa có tài khoản nào được nạp...</td>
+                        <td colspan="4" style="text-align: center;" class="text-muted">Chờ nhập danh sách...</td>
                     </tr>
                 </tbody>
             </table>
@@ -214,62 +210,23 @@
     </div>
 
     <script>
-        let loadedAccounts = [];
-
-        function handleFileSelect(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            document.getElementById('fileNameInfo').innerText = file.name;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const text = e.target.result;
-                loadedAccounts = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-                
-                // Hiển thị ngay danh sách email vừa nạp vào bảng bên dưới
-                renderInitialTable(loadedAccounts);
-            };
-            reader.readAsText(file);
-        }
-
-        function renderInitialTable(accounts) {
-            const tbody = document.getElementById('resultBody');
-            tbody.innerHTML = '';
-
-            if (accounts.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;" class="text-muted">File rỗng hoặc không đúng định dạng!</td></tr>`;
-                return;
-            }
-
-            accounts.forEach(line => {
-                const parts = line.split('|');
-                const email = parts[0] ? parts[0].trim() : line;
-
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${email}</td>
-                    <td><span class="text-muted">Chờ xử lý</span></td>
-                    <td><span class="text-muted">N/A</span></td>
-                    <td><span class="text-muted">Sẵn sàng</span></td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
         async function processVerify(isOpenTabs) {
             const btnRead = document.getElementById('btnRead');
             const btnAuto = document.getElementById('btnAuto');
+            const input = document.getElementById('emailInput').value.trim();
             const tbody = document.getElementById('resultBody');
 
-            if (loadedAccounts.length === 0) {
-                alert("Vui lòng chọn file chứa danh sách tài khoản trước!");
+            if (!input) {
+                alert("Vui lòng nhập tài khoản|mật khẩu vào!");
                 return;
             }
 
+            const lines = input.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+            // Mở tab ngay lập tức khi nhấn để vượt bộ lọc Safari/Chrome
             let openedTabs = [];
             if (isOpenTabs) {
-                for (let i = 0; i < loadedAccounts.length; i++) {
+                for (let i = 0; i < lines.length; i++) {
                     let win = window.open('about:blank', '_blank');
                     openedTabs.push(win);
                 }
@@ -277,19 +234,13 @@
 
             btnRead.disabled = true;
             btnAuto.disabled = true;
-            
-            // Cập nhật trạng thái đang quét
-            const rows = tbody.querySelectorAll('tr');
-            rows.forEach(row => {
-                const statusCell = row.children[1];
-                if (statusCell) statusCell.innerHTML = `<span class="text-muted">Đang quét...</span>`;
-            });
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;" class="text-muted">Đang quét ${lines.length} tài khoản (Vui lòng chờ)...</td></tr>`;
 
             try {
                 const response = await fetch('/api/verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ accounts: loadedAccounts })
+                    body: JSON.stringify({ accounts: lines })
                 });
 
                 const data = await response.json();
@@ -310,7 +261,7 @@
                                     tabStatus = " <span class='text-muted'>(Không có link)</span>";
                                 }
                             } else {
-                                tabStatus = " <span class='status-error-text'>(Bị trình duyệt chặn Pop-up)</span>";
+                                tabStatus = " <span class='status-error-text'>(Bị trình duyệt chặn)</span>";
                             }
                         }
 
@@ -331,7 +282,7 @@
                     });
                 } else {
                     openedTabs.forEach(t => t && t.close());
-                    tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;" class="status-error-text">Không nhận được dữ liệu phản hồi!</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;" class="status-error-text">Không nhận được dữ liệu từ Server!</td></tr>`;
                 }
 
             } catch (err) {
