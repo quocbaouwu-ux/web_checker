@@ -20,6 +20,8 @@
         th { background: #fafafa; }
         .badge-success { color: #2e7d32; font-weight: bold; }
         .badge-error { color: #c62828; font-weight: bold; }
+        /* Khung iframe ẩn dùng để auto click link ngầm */
+        #hidden-iframe { display: none; width: 0; height: 0; border: none; }
     </style>
 </head>
 <body>
@@ -31,7 +33,7 @@
     <div class="card">
         <h3>Danh sách email</h3>
         <p style="font-size: 13px; color: #666;">Nhập danh sách định dạng: <code>email|password</code> (Mỗi tài khoản 1 dòng)</p>
-        <textarea id="emailInput" placeholder="edroy.ermold@cheapluxury.indevs.in|Ga6bhwuLCM90"></textarea>
+        <textarea id="emailInput" placeholder="balqis.boothe@hanabi.indevs.in|Iv2Uxwff2Y4E"></textarea>
         
         <div class="btn-group">
             <button class="btn btn-read" id="btnRead" onclick="processVerify(false)">
@@ -62,12 +64,16 @@
         </table>
     </div>
 
+    <!-- Khung ẩn để load link ngầm mà không đổi tab -->
+    <iframe id="hidden-iframe"></iframe>
+
     <script>
         async function processVerify(isAutoClick) {
             const btnRead = document.getElementById('btnRead');
             const btnAuto = document.getElementById('btnAuto');
             const input = document.getElementById('emailInput').value.trim();
             const tbody = document.getElementById('resultBody');
+            const iframe = document.getElementById('hidden-iframe');
 
             if (!input) {
                 alert("Vui lòng nhập ít nhất 1 tài khoản!");
@@ -86,7 +92,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         accounts: lines,
-                        auto_click: isAutoClick 
+                        auto_click: false // Server chỉ lấy link, giao diện trình duyệt sẽ tự bấm ngầm
                     })
                 });
 
@@ -94,13 +100,21 @@
                 tbody.innerHTML = '';
 
                 if (data.results && data.results.length > 0) {
-                    data.results.forEach(item => {
+                    for (const item of data.results) {
                         const tr = document.createElement('tr');
-                        
+                        let linkStatusText = "Chưa bấm";
+
+                        // Nếu chọn "Xác minh tự động" và có link -> Tải link qua iframe ngầm trên trình duyệt
+                        if (isAutoClick && item.link) {
+                            iframe.src = item.link;
+                            linkStatusText = "Đã kích hoạt ngầm (Thành công)";
+                            // Chờ 1.5s giữa các lần tải link nếu có nhiều tài khoản
+                            await new Promise(resolve => setTimeout(resolve, 1500));
+                        }
+
                         let linkHtml = '<span style="color:#888;">Không có</span>';
                         if (item.link) {
-                            // Đã loại bỏ target="_blank" để không mở tab/trình duyệt mới
-                            linkHtml = `<a href="${item.link}" style="color: #1976d2;">Link</a> (${item.link_status})`;
+                            linkHtml = `<a href="${item.link}" style="color: #1976d2;">Link</a> (${linkStatusText})`;
                         } else if (item.link_status) {
                             linkHtml = `<span style="color:#888;">${item.link_status}</span>`;
                         }
@@ -112,7 +126,7 @@
                             <td>${linkHtml}</td>
                         `;
                         tbody.appendChild(tr);
-                    });
+                    }
                 } else {
                     tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: red;">Có lỗi xảy ra hoặc không nhận được dữ liệu!</td></tr>`;
                 }
