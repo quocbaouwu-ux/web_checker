@@ -13,14 +13,6 @@ app = Flask(__name__)
 CHEAPLUXURY_API_URL = "https://cheapluxurymail.xyz/login"
 MAX_WORKERS = 8
 
-# Sử dụng Session để giữ Cookie / Header mô phỏng trình duyệt khi gọi link xác minh
-session = requests.Session()
-session.headers.update({
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.9',
-})
-
 def is_within_15_minutes(date_str):
     if not date_str:
         return False
@@ -87,19 +79,7 @@ def extract_otp_and_link(subject, body_text, body_html):
     link_status = "Có link" if verify_link else "Chưa thấy yêu cầu đăng nhập"
     return otp_code, verify_link, link_status
 
-def trigger_verify_link(link):
-    """Hàm tự động gửi GET request ngầm trực tiếp vào link kích hoạt ("Tại đây")"""
-    try:
-        res = session.get(link, timeout=15, allow_redirects=True)
-        if res.status_code in [200, 301, 302]:
-            return True, "Đã bấm link tự động thành công"
-        else:
-            return False, f"Lỗi kích hoạt (HTTP {res.status_code})"
-    except Exception as e:
-        return False, f"Lỗi kết nối link: {str(e)}"
-
-def check_single_account(args):
-    line, auto_trigger = args
+def check_single_account(line):
     line = line.strip()
     if not line or '|' not in line:
         return {
@@ -107,8 +87,7 @@ def check_single_account(args):
             "status": "Thất bại",
             "otp": "N/A",
             "link": None,
-            "link_status": "Sai định dạng email|password",
-            "triggered": False
+            "link_status": "Sai định dạng email|password"
         }
 
     parts = line.split('|')
@@ -134,8 +113,7 @@ def check_single_account(args):
                     "status": "Thất bại",
                     "otp": "N/A",
                     "link": None,
-                    "link_status": "Lỗi kết nối (Server mail quá tải / Timeout)",
-                    "triggered": False
+                    "link_status": "Lỗi kết nối (Server mail quá tải / Timeout)"
                 }
 
     try:
@@ -145,8 +123,7 @@ def check_single_account(args):
                 "status": "Thất bại",
                 "otp": "N/A",
                 "link": None,
-                "link_status": f"Lỗi HTTP {response.status_code}",
-                "triggered": False
+                "link_status": f"Lỗi HTTP {response.status_code}"
             }
 
         res_data = response.json()
@@ -160,8 +137,7 @@ def check_single_account(args):
                     "status": "Thành công",
                     "otp": "Hòm thư trống",
                     "link": None,
-                    "link_status": "Chưa thấy yêu cầu đăng nhập",
-                    "triggered": False
+                    "link_status": "Chưa thấy yêu cầu đăng nhập"
                 }
             
             latest_email = emails_list[0]
@@ -173,8 +149,7 @@ def check_single_account(args):
                     "status": "Thành công",
                     "otp": "Không thấy OTP mới",
                     "link": None,
-                    "link_status": "Chưa thấy yêu cầu đăng nhập",
-                    "triggered": False
+                    "link_status": "Chưa thấy yêu cầu đăng nhập"
                 }
 
             subject = latest_email.get('subject', '')
@@ -183,19 +158,12 @@ def check_single_account(args):
 
             otp, link, link_status = extract_otp_and_link(subject, body_text, body_html)
 
-            is_triggered = False
-            # Nếu người dùng chọn nút "Xác minh tự động" và tìm thấy link -> Backend tự động gọi request bấm link ngầm
-            if auto_trigger and link:
-                is_triggered, trigger_msg = trigger_verify_link(link)
-                link_status = trigger_msg
-
             return {
                 "email": email,
                 "status": "Thành công",
                 "otp": otp,
                 "link": link,
-                "link_status": link_status,
-                "triggered": is_triggered
+                "link_status": link_status
             }
         else:
             return {
@@ -203,8 +171,7 @@ def check_single_account(args):
                 "status": "Thất bại",
                 "otp": "N/A",
                 "link": None,
-                "link_status": res_data.get('message', 'Đăng nhập không thành công'),
-                "triggered": False
+                "link_status": res_data.get('message', 'Đăng nhập không thành công')
             }
 
     except Exception as e:
@@ -213,8 +180,7 @@ def check_single_account(args):
             "status": "Thất bại",
             "otp": "N/A",
             "link": None,
-            "link_status": f"Lỗi xử lý dữ liệu: {str(e)}",
-            "triggered": False
+            "link_status": f"Lỗi xử lý dữ liệu: {str(e)}"
         }
 
 @app.route('/')
@@ -225,12 +191,9 @@ def index():
 def api_verify():
     data = request.get_json() or {}
     accounts = data.get('accounts', [])
-    auto_trigger = data.get('auto_trigger', False)
-
-    tasks = [(acc, auto_trigger) for acc in accounts]
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        results = list(executor.map(check_single_account, tasks))
+        results = list(executor.map(check_single_account, accounts))
 
     return jsonify({"results": [r for r in results if r is not None]})
 
