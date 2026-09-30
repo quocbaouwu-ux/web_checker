@@ -27,13 +27,16 @@
 <body>
 
     <div class="alert">
-        ⚠️️ <strong>LƯU Ý:</strong> Hòm thư hệ thống.
+        ⚠ <strong>LƯU Ý:</strong> Hòm thư hệ thống.
     </div>
 
     <div class="card">
         <h3>Danh sách email</h3>
         <p style="font-size: 13px; color: #666;">Nhập danh sách định dạng: <code>email|password</code> (Mỗi tài khoản 1 dòng)</p>
-        <textarea id="emailInput" placeholder="balqis.boothe@hanabi.indevs.in|Iv2Uxwff2Y4E"></textarea>
+        <!-- Thêm sẵn dữ liệu ví dụ thực tế trực tiếp vào nội dung textarea -->
+        <textarea id="emailInput">balqis.boothe@hanabi.indevs.in|Iv2Uxwff2Y4E
+user2@hanabi.indevs.in|PassWord123
+user3@hanabi.indevs.in|PassWord456</textarea>
         
         <div class="btn-group">
             <button class="btn btn-read" id="btnRead" onclick="processVerify(false)">
@@ -89,7 +92,8 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        accounts: lines
+                        accounts: lines,
+                        auto_click: isAutoClick
                     })
                 });
 
@@ -99,25 +103,12 @@
                 if (data.results && data.results.length > 0) {
                     data.results.forEach(item => {
                         const tr = document.createElement('tr');
-                        let linkStatusText = "Chưa bấm";
-
-                        // Nếu là chế độ Xác minh tự động và có link -> Tự động mở tab mới
-                        if (item.link) {
-                            if (isAutoClick) {
-                                window.open(item.link, '_blank');
-                                linkStatusText = "Đã mở tab xác minh";
-                            } else {
-                                linkStatusText = "Nhấp để mở";
-                            }
-                        } else if (item.link_status) {
-                            linkStatusText = item.link_status;
-                        }
 
                         let linkHtml = '<span style="color:#888;">Không có</span>';
                         if (item.link) {
-                            linkHtml = `<a href="${item.link}" target="_blank" style="color: #1976d2;">Link</a> (${linkStatusText})`;
-                        } else {
-                            linkHtml = `<span style="color:#888;">${linkStatusText}</span>`;
+                            linkHtml = `<a href="${item.link}" target="_blank" rel="noopener noreferrer" style="color: #1976d2;">Link</a> (${item.link_status})`;
+                        } else if (item.link_status) {
+                            linkHtml = `<span style="color:#888;">${item.link_status}</span>`;
                         }
 
                         tr.innerHTML = `
