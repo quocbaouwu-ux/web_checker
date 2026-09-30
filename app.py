@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 CHEAPLUXURY_API_URL = "https://cheapluxurymail.xyz/login"
 
-def extract_otp_and_link(subject, body_text, body_html):
+def extract_otp_and_link(subject, body_text, body_html, auto_click=False):
     otp_code = "Không thấy OTP"
     verify_link = None
     
@@ -43,9 +43,30 @@ def extract_otp_and_link(subject, body_text, body_html):
         if urls:
             verify_link = urls[0]
 
-    return otp_code, verify_link
+    # 3. Mở link ngầm ở Server Backend để tránh bị điều hướng nhảy sang App ngoài
+    link_status = "Chưa bấm"
+    if verify_link:
+        if auto_click:
+            session = requests.Session()
+            session.headers.update({
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
+            })
+            try:
+                resp = session.get(verify_link, timeout=12, allow_redirects=True)
+                if resp.status_code == 200:
+                    link_status = "Đã kích hoạt ngầm"
+                else:
+                    link_status = f"Lỗi HTTP {resp.status_code}"
+            except Exception as e:
+                link_status = f"Lỗi kích hoạt: {str(e)}"
+        else:
+            link_status = "Có link"
 
-def check_single_account(email, password):
+    return otp_code, verify_link, link_status
+
+def check_single_account(email, password, auto_click=False):
     try:
         payload = {
             'email': email,
@@ -85,14 +106,14 @@ def check_single_account(email, password):
             body_text = latest_email.get('body_text', '')
             body_html = latest_email.get('body_html', '')
 
-            otp, link = extract_otp_and_link(subject, body_text, body_html)
+            otp, link, link_status = extract_otp_and_link(subject, body_text, body_html, auto_click=auto_click)
 
             return {
                 "email": email,
                 "status": "Thành công",
                 "otp": otp,
                 "link": link,
-                "link_status": "Có link" if link else "Không tìm thấy link"
+                "link_status": link_status
             }
         else:
             msg = res_data.get('message', 'Đăng nhập không thành công')
@@ -121,6 +142,7 @@ def index():
 def api_verify():
     data = request.get_json() or {}
     accounts = data.get('accounts', [])
+    auto_click = data.get('auto_click', False)
 
     results = []
     for line in accounts:
@@ -128,7 +150,7 @@ def api_verify():
             parts = line.split('|')
             email = parts[0].strip()
             password = parts[1].strip()
-            res = check_single_account(email, password)
+            res = check_single_account(email, password, auto_click=auto_click)
             results.append(res)
         else:
             results.append({
