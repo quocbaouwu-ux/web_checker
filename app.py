@@ -3,7 +3,7 @@ import re
 import imaplib
 import email
 from email.header import decode_header
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, make_response
 import requests
 from bs4 import BeautifulSoup
 
@@ -14,12 +14,12 @@ def extract_otp_and_link(subject, body):
     verify_link = None
     full_text = f"{subject} {body}"
 
-    # 1. Tìm chuỗi 6 chữ số OTP
+    # 1. Bắt mã OTP 6 chữ số
     digits = re.findall(r'\b\d{6}\b', full_text)
     if digits:
         otp_code = digits[0]
 
-    # 2. Bắt link TẠI ĐÂY
+    # 2. Tìm link TẠI ĐÂY trong mail HTML
     try:
         soup = BeautifulSoup(body, 'html.parser')
         for a_tag in soup.find_all('a', href=True):
@@ -30,7 +30,7 @@ def extract_otp_and_link(subject, body):
     except Exception:
         pass
 
-    # 3. Kích hoạt link bằng User-Agent Browser
+    # 3. Giả lập trình duyệt tự động gửi GET request bấm link
     link_status = "Không có link TẠI ĐÂY"
     if verify_link:
         try:
@@ -40,9 +40,9 @@ def extract_otp_and_link(subject, body):
             }
             resp = requests.get(verify_link, headers=headers, timeout=10, allow_redirects=True)
             if resp.status_code == 200:
-                link_status = "Đã bấm link (Thành công)"
+                link_status = "Thành công"
             else:
-                link_status = f"Đã bấm link (HTTP {resp.status_code})"
+                link_status = f"HTTP {resp.status_code}"
         except Exception as e:
             link_status = f"Lỗi kích hoạt: {str(e)}"
 
@@ -66,7 +66,12 @@ def decode_mime_header(header_value):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    # Thêm Header cấm lưu cache trình duyệt để bắt buộc load lại giao diện mới
+    response = make_response(render_template('index.html'))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 @app.route('/api/verify', methods=['POST'])
 def verify_accounts():
