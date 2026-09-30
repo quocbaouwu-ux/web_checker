@@ -1,172 +1,144 @@
 import os
 import re
-import imaplib
-import email
-from email.header import decode_header
 from flask import Flask, render_template, request, jsonify, make_response
 import requests
 from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
-def extract_otp_and_link(subject, body):
+def extract_otp_and_link(subject, body_text, body_html):
     otp_code = "Không thấy OTP"
     verify_link = None
-    full_text = f"{subject} {body}"
-
-    # 1. Bắt mã OTP 6 chữ số
+    
+    # Gộp nội dung để quét mã OTP 6 số
+    full_text = f"{subject} {body_text}"
     digits = re.findall(r'\b\d{6}\b', full_text)
     if digits:
         otp_code = digits[0]
 
-    # 2. Tìm link TẠI ĐÂY trong mail HTML
+    # 1. Tìm link xác minh trong body_html
+    target_html = body_html if body_html else body_text
     try:
-        soup = BeautifulSoup(body, 'html.parser')
+        soup = BeautifulSoup(target_html, 'html.parser')
         for a_tag in soup.find_all('a', href=True):
             text_inside = a_tag.get_text().strip().upper()
-            if "TẠI ĐÂY" in text_inside or "TAI DAY" in text_inside:
+            if "TẠI ĐÂY" in text_inside or "TAI DAY" in text_inside or "XÁC MINH" in text_inside:
                 verify_link = a_tag['href']
                 break
     except Exception:
         pass
 
-    # 3. Giả lập trình duyệt tự động gửi GET request bấm link
-    link_status = "Không có link TẠI ĐÂY"
+    # 2. Tự động kích hoạt link xác minh
+    link_status = "Không có link"
     if verify_link:
         try:
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
-            resp = requests.get(verify_link, headers=headers, timeout=10, allow_redirects=True)
+            resp = requests.get(verify_link, headers=headers, timeout=8, allow_redirects=True)
             if resp.status_code == 200:
                 link_status = "Thành công"
             else:
                 link_status = f"HTTP {resp.status_code}"
-        except Exception as e:
-            link_status = f"Lỗi kích hoạt: {str(e)}"
+        except Exception:
+            link_status = "Lỗi kích hoạt"
 
     return otp_code, verify_link, link_status
 
-def decode_mime_header(header_value):
-    if not header_value:
-        return ""
-    decoded_list = decode_header(header_value)
-    header_text = ""
-    for decoded_string, charset in decoded_list:
-        if isinstance(decoded_string, bytes):
-            charset = charset or 'utf-8'
-            try:
-                header_text += decoded_string.decode(charset, errors='ignore')
-            except Exception:
-                header_text += decoded_string.decode('latin-1', errors='ignore')
-        else:
-            header_text += str(decoded_string)
-    return header_text
-
 @app.route('/')
 def index():
-    # Thêm Header cấm lưu cache trình duyệt để bắt buộc load lại giao diện mới
     response = make_response(render_template('index.html'))
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
     return response
 
 @app.route('/api/verify', methods=['POST'])
 def verify_accounts():
-    data = request.get_json() or {}
-    account_lines = data.get('accounts', [])
-    results = []
+    try:
+        data = request.get_json(silent=True) or {}
+        account_lines = data.get('accounts', [])
+        results = []
 
-    for line in account_lines:
-        line = line.strip()
-        if not line:
-            continue
-            
-        parts = line.split('|')
-        email_user = parts[0].strip()
-        email_pass = parts[1].strip() if len(parts) > 1 else ""
+        for line in account_lines:
+            line = str(line).strip()
+            if not line:
+                continue
+                
+            parts = line.split('|')
+            email_user = parts[0].strip()
+            email_pass = parts[1].strip() if len(parts) > 1 else ""
 
-        if not email_pass:
-            results.append({
-                "email": email_user,
-                "status": "Lỗi",
-                "otp": "Thiếu Pass",
-                "link": None,
-                "link_status": "Lỗi"
-            })
-            continue
-
-        try:
-            domain = email_user.split('@')[-1].lower() if '@' in email_user else ''
-            if 'gmail' in domain:
-                imap_server = 'imap.gmail.com'
-            elif 'outlook' in domain or 'hotmail' in domain or 'live' in domain:
-                imap_server = 'outlook.office365.com'
-            else:
-                imap_server = domain if domain else 'mail.fshare.dpdns.org'
-
-            mail = imaplib.IMAP4_SSL(imap_server, port=993)
-            mail.login(email_user, email_pass)
-            mail.select("INBOX")
-
-            status, messages = mail.search(None, 'ALL')
-            mail_ids = messages[0].split()
-
-            if not mail_ids:
+            if not email_pass:
                 results.append({
                     "email": email_user,
-                    "status": "Thành công",
-                    "otp": "Hòm thư trống",
+                    "status": "Lỗi",
+                    "otp": "Thiếu Pass",
                     "link": None,
-                    "link_status": "Không có mail"
+                    "link_status": "Lỗi"
                 })
-                mail.logout()
                 continue
 
-            latest_email_id = mail_ids[-1]
-            status, msg_data = mail.fetch(latest_email_id, '(RFC822)')
+            # Gọi API CheapLuxuryMail
+            try:
+                payload = {
+                    "email": email_user,
+                    "password": email_pass
+                }
+                api_resp = requests.post(
+                    "https://cheapluxurymail.xyz/login",
+                    json=payload,
+                    timeout=10
+                )
 
-            subject = ""
-            body = ""
+                if api_resp.status_code == 200:
+                    json_data = api_resp.json()
+                    emails_list = json_data.get('data', {}).get('emails', [])
 
-            for response_part in msg_data:
-                if isinstance(response_part, tuple):
-                    msg = email.message_from_bytes(response_part[1])
-                    subject = decode_mime_header(msg.get("Subject", ""))
-
-                    if msg.is_multipart():
-                        for part in msg.walk():
-                            content_type = part.get_content_type()
-                            content_disposition = str(part.get("Content-Disposition"))
-                            if content_type in ["text/plain", "text/html"] and "attachment" not in content_disposition:
-                                body += part.get_payload(decode=True).decode(errors='ignore')
+                    if not emails_list:
+                        results.append({
+                            "email": email_user,
+                            "status": "Thành công",
+                            "otp": "Hòm thư trống",
+                            "link": None,
+                            "link_status": "Không có mail"
+                        })
                     else:
-                        body = msg.get_payload(decode=True).decode(errors='ignore')
+                        # Lấy email mới nhất
+                        latest_mail = emails_list[0]
+                        subject = latest_mail.get("subject", "")
+                        body_text = latest_mail.get("body_text", "")
+                        body_html = latest_mail.get("body_html", "")
 
-            mail.logout()
+                        otp_code, verify_link, link_status = extract_otp_and_link(subject, body_text, body_html)
 
-            otp_code, verify_link, link_status = extract_otp_and_link(subject, body)
+                        results.append({
+                            "email": email_user,
+                            "status": "Thành công",
+                            "otp": otp_code,
+                            "link": verify_link,
+                            "link_status": link_status
+                        })
+                else:
+                    results.append({
+                        "email": email_user,
+                        "status": "Lỗi",
+                        "otp": f"HTTP {api_resp.status_code}",
+                        "link": None,
+                        "link_status": "Sai pass hoặc Server mail lỗi"
+                    })
 
-            results.append({
-                "email": email_user,
-                "status": "Thành công",
-                "otp": otp_code,
-                "link": verify_link,
-                "link_status": link_status
-            })
+            except Exception as e:
+                results.append({
+                    "email": email_user,
+                    "status": "Lỗi",
+                    "otp": "Lỗi API",
+                    "link": None,
+                    "link_status": f"Lỗi: {str(e)}"
+                })
 
-        except Exception as e:
-            results.append({
-                "email": email_user,
-                "status": "Lỗi",
-                "otp": "Lỗi IMAP",
-                "link": None,
-                "link_status": f"Lỗi: {str(e)}"
-            })
+        return jsonify({"results": results})
 
-    return jsonify({"results": results})
+    except Exception as global_e:
+        return jsonify({"results": [], "error": str(global_e)}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
