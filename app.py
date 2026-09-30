@@ -11,33 +11,26 @@ app = Flask(__name__)
 CHEAPLUXURY_API_URL = "https://cheapluxurymail.xyz/login"
 
 def is_within_15_minutes(date_str):
-    """Kiểm tra xem email có được gửi trong vòng 15 phút gần đây không (dùng thư viện có sẵn)"""
+    """Kiểm tra xem email có được gửi trong vòng 15 phút gần đây không"""
     if not date_str:
         return False
     try:
-        # Thử parse thời gian dạng chuẩn RFC 2822 hoặc ISO
         try:
             email_time = parsedate_to_datetime(date_str)
         except Exception:
-            # Fallback nếu định dạng ISO string (2026-09-30T17:57:00Z)
             email_time = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
         
         if email_time.tzinfo is None:
             email_time = email_time.replace(tzinfo=timezone.utc)
         
-        # Thời gian hiện tại UTC
         now = datetime.now(timezone.utc)
-        
-        # Tính khoảng cách thời gian (tính bằng giây)
         diff_in_seconds = (now - email_time).total_seconds()
         
-        # 15 phút = 900 giây
         return 0 <= diff_in_seconds <= 900
     except Exception:
-        # Nếu không parse được định dạng ngày, mặc định chấp nhận
         return True
 
-def extract_otp_and_link(subject, body_text, body_html, auto_click=False):
+def extract_otp_and_link(subject, body_text, body_html):
     otp_code = "Không thấy OTP"
     verify_link = None
     
@@ -84,28 +77,10 @@ def extract_otp_and_link(subject, body_text, body_html, auto_click=False):
                 verify_link = url
                 break
 
-    # 3. Xử lý kích hoạt
-    link_status = "Chưa thấy yêu cầu đăng nhập"
-    if verify_link:
-        if auto_click:
-            session = requests.Session()
-            session.headers.update({
-                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'
-            })
-            try:
-                resp = session.get(verify_link, timeout=10, allow_redirects=True)
-                if resp.status_code in [200, 301, 302]:
-                    link_status = "Đã xác minh"
-                else:
-                    link_status = f"Lỗi HTTP {resp.status_code}"
-            except Exception:
-                link_status = "Lỗi kích hoạt"
-        else:
-            link_status = "Có link"
-
+    link_status = "Có link" if verify_link else "Chưa thấy yêu cầu đăng nhập"
     return otp_code, verify_link, link_status
 
-def check_single_account(email, password, auto_click=False):
+def check_single_account(email, password):
     try:
         payload = {
             'email': email,
@@ -140,11 +115,10 @@ def check_single_account(email, password, auto_click=False):
                     "link_status": "Chưa thấy yêu cầu đăng nhập"
                 }
             
-            # Lấy thư mới nhất
             latest_email = emails_list[0]
             date_str = latest_email.get('date') or latest_email.get('created_at') or latest_email.get('time')
 
-            # Kiểm tra xem mail có trong vòng 15 phút gần đây không
+            # Kiểm tra thời gian 15 phút
             if not is_within_15_minutes(date_str):
                 return {
                     "email": email,
@@ -158,7 +132,7 @@ def check_single_account(email, password, auto_click=False):
             body_text = latest_email.get('body_text', '')
             body_html = latest_email.get('body_html', '')
 
-            otp, link, link_status = extract_otp_and_link(subject, body_text, body_html, auto_click=auto_click)
+            otp, link, link_status = extract_otp_and_link(subject, body_text, body_html)
 
             return {
                 "email": email,
@@ -194,7 +168,6 @@ def index():
 def api_verify():
     data = request.get_json() or {}
     accounts = data.get('accounts', [])
-    auto_click = data.get('auto_click', False)
 
     results = []
     for line in accounts:
@@ -202,7 +175,7 @@ def api_verify():
             parts = line.split('|')
             email = parts[0].strip()
             password = parts[1].strip()
-            res = check_single_account(email, password, auto_click=auto_click)
+            res = check_single_account(email, password)
             results.append(res)
         else:
             results.append({
