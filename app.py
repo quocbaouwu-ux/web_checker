@@ -254,7 +254,7 @@ def icloud_accounts():
 
 
 def scan_icloud_mailbox(main, password, wanted):
-    """Quét một hộp thư chính, trả về ({alias: dòng kết quả}, có_lỗi)."""
+    """Quét một hộp thư chính, trả về ({alias: dòng kết quả}, chuỗi_lỗi — rỗng nếu không lỗi)."""
     found = {}
     try:
         m = imaplib.IMAP4_SSL(ICLOUD_IMAP_HOST, 993, timeout=20)
@@ -307,10 +307,11 @@ def scan_icloud_mailbox(main, password, wanted):
                 m.logout()
             except Exception:
                 pass
-        return found, False
+        return found, ""
     except Exception as e:
-        print(f"[iCloud] lỗi hộp thư {main}: {type(e).__name__}: {str(e)[:200]}")   # chỉ ghi log phía server (không có mật khẩu)
-        return found, True
+        err = f"{type(e).__name__}: {str(e)[:120]}"
+        print(f"[iCloud] lỗi hộp thư {main}: {err}")   # ghi log phía server (không có mật khẩu)
+        return found, err
 
 
 def check_icloud_aliases(lines):
@@ -329,13 +330,18 @@ def check_icloud_aliases(lines):
 
     accounts = icloud_accounts()
     wanted = set(order)
-    found, errors = {}, 0
+    found, errors, details = {}, 0, []
     if accounts and wanted:
         with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(accounts))) as executor:
-            for res, had_error in executor.map(lambda a: scan_icloud_mailbox(a[0], a[1], wanted), accounts):
-                errors += 1 if had_error else 0
-                for k, v in res.items():
-                    found.setdefault(k, v)
+            results = list(executor.map(lambda a: scan_icloud_mailbox(a[0], a[1], wanted), accounts))
+        for (main, _), (res, err) in zip(accounts, results):
+            if err:
+                errors += 1
+                details.append(f"{main}: {err}")
+            for k, v in res.items():
+                found.setdefault(k, v)
+    # Chủ web bật ICLOUD_DEBUG=1 trên Render để thấy lý do lỗi ngay trên trang (tắt khi dùng thật)
+    debug = (" | " + "; ".join(details)) if details and os.environ.get("ICLOUD_DEBUG") == "1" else ""
 
     for alias in order:
         if alias in found:
@@ -343,9 +349,9 @@ def check_icloud_aliases(lines):
         elif not accounts:
             rows.append(icloud_row(alias, "Thất bại", "N/A", None, "Hệ thống chưa cấu hình hộp thư iCloud"))
         elif errors == len(accounts):
-            rows.append(icloud_row(alias, "Thất bại", "N/A", None, "Không đọc được hộp thư, thử lại sau"))
+            rows.append(icloud_row(alias, "Thất bại", "N/A", None, "Không đọc được hộp thư, thử lại sau" + debug))
         elif errors:
-            rows.append(icloud_row(alias, "Thất bại", "N/A", None, "Chưa thấy mail, một hộp thư đang lỗi nên có thể thiếu kết quả, thử lại"))
+            rows.append(icloud_row(alias, "Thất bại", "N/A", None, "Chưa thấy mail, một hộp thư đang lỗi nên có thể thiếu kết quả, thử lại" + debug))
         else:
             rows.append(icloud_row(alias, "Thành công", "Không thấy OTP mới", None, "Chưa thấy yêu cầu đăng nhập"))
     return rows
