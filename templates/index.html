@@ -29,17 +29,22 @@
         a.link-btn { color: #2563eb; text-decoration: underline; font-weight: 600; }
         .text-muted { color: #6b7280; }
         .status-error-text { color: #dc2626; font-size: 12px; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+        .tab { flex: 1; padding: 10px; border: 1px solid #3b82f6; border-radius: 10px; background: #fff; color: #3b82f6; font-size: 14px; font-weight: 600; cursor: pointer; }
+        .tab.active { background: #3b82f6; color: #fff; }
     </style>
 </head>
 <body>
 
-    <div class="alert-box">
-        ⚠ LƯU Ý: Hòm thư hệ thống.
-    </div>
+    <div class="alert-box" id="alertBox">⚠ LƯU Ý: Hòm thư hệ thống.</div>
 
     <div class="card">
         <h3>Danh sách email</h3>
-        <p class="sub-text">Nhập danh sách định dạng: <code>email|password</code> (Mỗi tài khoản 1 dòng)</p>
+        <div class="tabs">
+            <button class="tab active" id="tabSystem" onclick="setSource('system')">Mail hệ thống</button>
+            <button class="tab" id="tabIcloud" onclick="setSource('icloud')">Mail iCloud</button>
+        </div>
+        <p class="sub-text" id="hintText">Nhập danh sách định dạng: <code>email|password</code> (Mỗi tài khoản 1 dòng)</p>
         
         <textarea id="emailInput" placeholder="Vui lòng nhập tài khoản|mật khẩu vào (Mỗi tài khoản 1 dòng)"></textarea>
         
@@ -75,6 +80,33 @@
     </div>
 
     <script>
+        const SOURCE_TEXT = {
+            system: {
+                alert: "⚠ LƯU Ý: Hòm thư hệ thống.",
+                hint: "Nhập danh sách định dạng: <code>email|password</code> (Mỗi tài khoản 1 dòng)",
+                ph: "Vui lòng nhập tài khoản|mật khẩu vào (Mỗi tài khoản 1 dòng)"
+            },
+            icloud: {
+                alert: "⚠ LƯU Ý: Hòm thư iCloud của hệ thống, chỉ đọc mail trong 10 phút gần nhất.",
+                hint: "Chỉ nhập <code>email</code>, mỗi email một dòng (không cần mật khẩu).",
+                ph: "email@icloud.com"
+            }
+        };
+        let source = 'system';
+
+        function setSource(s) {
+            source = s;
+            document.getElementById('tabSystem').classList.toggle('active', s === 'system');
+            document.getElementById('tabIcloud').classList.toggle('active', s === 'icloud');
+            document.getElementById('alertBox').textContent = SOURCE_TEXT[s].alert;
+            document.getElementById('hintText').innerHTML = SOURCE_TEXT[s].hint;
+            const input = document.getElementById('emailInput');
+            input.placeholder = SOURCE_TEXT[s].ph;
+            input.value = '';   // xoá để không gửi nhầm định dạng giữa hai tab
+            document.getElementById('resultBody').innerHTML =
+                '<tr><td colspan="4" style="text-align: center;" class="text-muted">Chờ nhập danh sách...</td></tr>';
+        }
+
         async function processVerify(isOpenTabs) {
             const btnRead = document.getElementById('btnRead');
             const btnAuto = document.getElementById('btnAuto');
@@ -102,7 +134,7 @@
                 const response = await fetch('/api/verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ accounts: lines })
+                    body: JSON.stringify({ accounts: lines, source: source })
                 });
 
                 const data = await response.json();
