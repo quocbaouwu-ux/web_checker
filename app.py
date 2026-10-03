@@ -309,7 +309,7 @@ def scan_icloud_mailbox(main, password, wanted):
                 pass
         return found, False
     except Exception as e:
-        print(f"[iCloud] lỗi hộp thư {main}: {type(e).__name__}")   # chỉ ghi log phía server
+        print(f"[iCloud] lỗi hộp thư {main}: {type(e).__name__}: {str(e)[:200]}")   # chỉ ghi log phía server (không có mật khẩu)
         return found, True
 
 
