@@ -193,6 +193,20 @@ def check_single_account(line):
             "link_status": f"Lỗi xử lý dữ liệu: {str(e)}"
         }
 
+OTP_SPACED = re.compile(r'(?<!\d)\d(?: \d){5}(?!\d)')      # 2 7 4 9 4 6
+OTP_PLAIN = re.compile(r'(?<!\d)\d{6}(?!\d)')             # 274946
+
+
+def find_otp(text):
+    """Tìm mã OTP 6 số trong chữ hiển thị của mail; trả về chuỗi 6 số hoặc None."""
+    text = re.sub(r'\s+', ' ', text)        # gộp xuống dòng, khoảng trắng, &nbsp;
+    m = OTP_SPACED.search(text)
+    if m:
+        return re.sub(r'\D', '', m.group(0))
+    m = OTP_PLAIN.search(text)
+    return m.group(0) if m else None
+
+
 def icloud_row(email_addr, status, otp, link, link_status):
     return {"email": email_addr, "status": status, "otp": otp, "link": link, "link_status": link_status}
 
@@ -277,16 +291,16 @@ def scan_icloud_mailbox(main, password, wanted):
                     subject = ""
                 text, html = icloud_parts(msg)
                 visible = BeautifulSoup(html, 'html.parser').get_text(" ") if html else text
-                otp_m = re.search(r'(?<!\d)\d{6}(?!\d)', f"{subject} {visible}")
+                otp = find_otp(f"{subject} {visible}")
                 _, link, _ = extract_otp_and_link(subject, text, html)
                 if link and not SAFE_URL_RE.match(link):
                     link = None
-                if not link and not otp_m:
+                if not link and not otp:
                     continue                             # không phải mail xác minh
                 for alias in hits:
                     found[alias] = icloud_row(
                         alias, "Thành công",
-                        otp_m.group(0) if otp_m else "Không thấy OTP",
+                        otp or "Không thấy OTP",
                         link, "Có link" if link else "Chưa thấy yêu cầu đăng nhập")
         finally:
             try:
